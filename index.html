@@ -3392,7 +3392,7 @@ body:not(.fullscreen-mode) #editorView .image-thumb-title { padding: 3px 9px; bo
   #projectManagerView .project-card-name { overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>
-<link rel="stylesheet" href="notes/notes-editor.css?v=1.23.27">
+<link rel="stylesheet" href="notes/notes-editor.css?v=1.23.28">
 <style>
 /* Favorite affordances and tighter project card framing. */
 #projectManagerView .project-card {min-height:0;grid-template-rows:176px auto;}
@@ -4792,7 +4792,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.23.27';
+      const APP_VERSION = '1.23.28';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -12216,9 +12216,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.23.27"></script>
-<link rel="stylesheet" href="inventory/inventory.css?v=1.23.27">
-<script src="inventory/inventory.js?v=1.23.27"></script>
+<script src="notes/notes-editor.js?v=1.23.28"></script>
+<link rel="stylesheet" href="inventory/inventory.css?v=1.23.28">
+<script src="inventory/inventory.js?v=1.23.28"></script>
 
 <style id="workspace-account-notes-layout-v1238">
   #workspaceNotes .workspace-notes-heading {
@@ -12992,143 +12992,153 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sidebar-footer{margin-top:0!important}
   }
 </style>
-<style id="manager-toolbars-premium-v12325">
-  /* A compact, aligned control deck shared by Projects, Notes and Inventory. */
+<style id="manager-toolbars-premium-v12328">
+  /* Shared, predictable toolbar grid for Projects, Notes, and Inventory. */
   #projectManagerView .project-manager-heading,
   #projectManagerView #workspaceNotes .workspace-notes-heading{
-    grid-template-columns:48px minmax(170px,.78fr) minmax(260px,1.25fr) auto!important;
+    display:grid!important;
+    grid-template-columns:48px minmax(180px,.72fr) minmax(280px,1.28fr) auto!important;
     grid-template-areas:"icon copy search actions" "filters filters filters controls"!important;
-    gap:12px 14px!important;margin:0 0 18px!important;padding:18px 20px!important;
-    border-radius:19px!important;box-shadow:0 10px 26px rgba(38,67,96,.055)!important;
+    gap:13px 15px!important;margin:0 0 18px!important;padding:20px 22px!important;
+    border:1px solid #dbe5ef!important;border-radius:20px!important;
+    background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(247,250,253,.96))!important;
+    box-shadow:0 12px 30px rgba(38,67,96,.065)!important
   }
+  #projectManagerView .project-manager-heading>.manager-page-icon,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-page-icon,
+  #workspaceInventory .workspace-inventory-heading>.manager-page-icon{
+    grid-area:icon!important;width:48px;height:48px;border-radius:15px
+  }
+  #projectManagerView .project-manager-heading>.manager-heading-copy,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-heading-copy,
+  #workspaceInventory .workspace-inventory-heading>.manager-heading-copy{grid-area:copy!important;min-width:0}
+  #projectManagerView .project-manager-heading>.manager-search,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search{grid-area:search!important}
+  #projectManagerView .project-manager-heading>.project-section-actions,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions{grid-area:actions!important}
+  #projectManagerView .project-manager-heading>.project-status-filters,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters{grid-area:filters!important}
+  #projectManagerView .project-manager-heading>.manager-view-controls,
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-view-controls{grid-area:controls!important}
   #projectManagerView .manager-page-icon,
   #workspaceInventory .manager-page-icon{width:48px;height:48px;border-radius:15px}
   #projectManagerView .manager-page-icon svg,
   #workspaceInventory .manager-page-icon svg{width:24px;height:24px}
-  #projectManagerView .manager-heading-copy .project-manager-page-title{font-size:clamp(27px,2.6vw,38px)!important;line-height:1.05}
+  #projectManagerView .manager-heading-copy .project-manager-page-title{font-size:clamp(29px,2.5vw,38px)!important;line-height:1.05}
   #projectManagerView .project-manager-heading>.manager-search,
   #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search{
-    min-height:46px!important;border-radius:13px!important;padding:0 13px!important;
-    box-shadow:0 2px 8px rgba(35,62,89,.035)!important
+    min-height:48px!important;border-radius:14px!important;padding:0 15px!important;
+    box-shadow:0 3px 10px rgba(35,62,89,.045)!important
   }
   #projectManagerView .project-manager-heading>.manager-search input,
-  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search input{height:42px!important}
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search input{height:44px!important}
   #projectManagerView .project-manager-heading>.project-section-actions,
-  #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions{gap:8px!important}
+  #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions{display:flex!important;gap:9px!important}
   #projectManagerView .project-manager-heading>.project-section-actions .ui-action,
   #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions .ui-action{
-    min-height:44px!important;padding:9px 13px!important;border-radius:12px!important;font-size:12px!important
+    min-height:46px!important;padding:10px 15px!important;border-radius:13px!important;font-size:12px!important
   }
   #projectManagerView .project-manager-heading>.project-status-filters,
   #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters{
-    grid-column:1/4!important;grid-row:2!important;grid-area:auto!important;
     display:flex!important;align-items:center!important;justify-self:start!important;
-    width:fit-content!important;max-width:100%!important;flex-wrap:nowrap!important;
-    gap:4px!important;margin:0!important;padding:4px!important;overflow-x:auto;overflow-y:hidden;
-    border:1px solid #e2eaf2!important;border-radius:13px!important;background:#f3f7fb!important;
-    scrollbar-width:thin
+    width:fit-content!important;max-width:100%!important;flex-wrap:wrap!important;
+    gap:6px!important;margin:0!important;padding:5px!important;overflow:visible!important;
+    border:1px solid #e0e8f1!important;border-radius:14px!important;background:#f4f8fc!important;
+    box-shadow:inset 0 1px rgba(255,255,255,.8)
   }
   #projectManagerView .project-manager-heading>.project-status-filters .project-status-filter,
   #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters button{
-    min-height:34px!important;padding:6px 9px!important;border-radius:9px!important;
-    font-size:11px!important;gap:6px!important
+    min-height:38px!important;padding:8px 11px!important;border-radius:10px!important;
+    font-size:12px!important;gap:7px!important;white-space:nowrap
   }
   #projectManagerView .project-manager-heading>.manager-view-controls,
   #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-view-controls{
-    grid-column:4!important;grid-row:2!important;grid-area:auto!important;
-    display:flex!important;align-items:center!important;justify-self:end!important;gap:6px!important;
-    width:fit-content!important;min-height:44px;padding:3px;border:1px solid #e2eaf2;border-radius:13px;
-    background:#f3f7fb
+    display:flex!important;align-items:center!important;justify-self:end!important;gap:7px!important;
+    width:fit-content!important;min-height:48px!important;padding:4px!important;
+    border:1px solid #e0e8f1!important;border-radius:14px!important;background:#f4f8fc!important
   }
   #projectManagerView .manager-sort-label{
-    height:36px!important;min-height:36px!important;padding:0 8px!important;
-    border-radius:9px!important;background:#fff!important;font-size:10px!important
+    height:38px!important;min-height:38px!important;padding:0 10px!important;gap:7px!important;
+    border-radius:10px!important;background:#fff!important;font-size:11px!important
   }
-  #projectManagerView .manager-sort-label select{height:30px!important;min-height:30px!important;font-size:11px!important}
+  #projectManagerView .manager-sort-label select{height:32px!important;min-height:32px!important;font-size:12px!important}
   #projectManagerView .manager-layout-switch{
-    height:36px!important;min-height:36px!important;padding:2px!important;border:1px solid #dfe7f0!important;
-    border-radius:9px!important;background:#fff!important
+    height:38px!important;min-height:38px!important;padding:2px!important;
+    border:1px solid #dfe7f0!important;border-radius:10px!important;background:#fff!important
   }
   #projectManagerView .manager-layout-switch button{
-    height:30px!important;min-height:30px!important;width:32px!important;min-width:32px!important;
-    border-radius:7px!important;font-size:16px!important
+    height:32px!important;min-height:32px!important;width:36px!important;min-width:36px!important;
+    border-radius:8px!important;font-size:16px!important
   }
+
   #workspaceInventory .inventory-manager-toolbar{
-    margin-bottom:10px;padding:16px 18px 13px!important;border-radius:19px!important;
-    box-shadow:0 10px 26px rgba(38,67,96,.055)!important
+    margin-bottom:14px;padding:19px 21px 16px!important;border:1px solid #dbe5ef!important;
+    border-radius:20px!important;background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(247,250,253,.96))!important;
+    box-shadow:0 12px 30px rgba(38,67,96,.065)!important
   }
   #workspaceInventory .workspace-inventory-heading{
-    grid-template-columns:48px minmax(190px,.82fr) minmax(250px,1.2fr) auto;
-    gap:12px 14px
+    display:grid!important;grid-template-columns:48px minmax(190px,.78fr) minmax(280px,1.22fr) auto!important;
+    grid-template-areas:"icon copy search actions"!important;gap:13px 15px!important;align-items:center
   }
-  #workspaceInventory .manager-search{min-height:46px;border-radius:13px;padding:0 13px}
-  #workspaceInventory .manager-search input{height:42px}
-  #workspaceInventory .project-manager-actions .ui-action{min-height:44px;padding:9px 13px;border-radius:12px;font-size:12px}
-  #workspaceInventory .inventory-search-panel{margin-top:12px;padding-top:12px}
-  #workspaceInventory .inventory-search-row{gap:10px}
-  #workspaceInventory .inventory-dimension-filters{gap:9px}
-  @media(max-width:1120px){
+  #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;min-height:48px;border-radius:14px;padding:0 15px}
+  #workspaceInventory .workspace-inventory-heading>.project-manager-actions{grid-area:actions!important;display:flex;gap:9px}
+  #workspaceInventory .manager-search input{height:44px}
+  #workspaceInventory .project-manager-actions .ui-action{min-height:46px;padding:10px 15px;border-radius:13px;font-size:12px}
+  #workspaceInventory .inventory-search-panel{margin-top:14px;padding-top:14px}
+  #workspaceInventory .inventory-search-row{gap:12px}
+  #workspaceInventory .inventory-dimension-filters{gap:10px}
+
+  /* The fixed sidebar consumes part of a tablet's viewport; give its content a four-row control rhythm. */
+  @media(max-width:1350px){
     #projectManagerView .project-manager-heading,
     #projectManagerView #workspaceNotes .workspace-notes-heading{
       grid-template-columns:46px minmax(0,1fr) auto!important;
       grid-template-areas:"icon copy actions" "search search search" "filters filters filters" "controls controls controls"!important;
-      gap:11px 12px!important;padding:16px!important
+      gap:12px 14px!important;padding:18px!important
     }
     #projectManagerView .project-manager-heading>.manager-search,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search{grid-column:1/-1!important;grid-row:2!important}
-    #projectManagerView .project-manager-heading>.project-section-actions,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions{grid-column:3!important;grid-row:1!important}
+    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-search{width:100%;min-width:0}
     #projectManagerView .project-manager-heading>.project-status-filters,
     #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters{
-      grid-column:1/-1!important;grid-row:3!important;width:100%!important
+      justify-self:stretch!important;width:100%!important;flex-wrap:wrap!important;gap:6px!important
     }
     #projectManagerView .project-manager-heading>.manager-view-controls,
     #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-view-controls{
-      grid-column:1/-1!important;grid-row:4!important
+      justify-self:stretch!important;width:100%!important;justify-content:flex-end!important
     }
+    #workspaceInventory .inventory-manager-toolbar{padding:18px!important}
     #workspaceInventory .workspace-inventory-heading{
-      grid-template-columns:46px minmax(0,1fr) auto;grid-template-areas:"icon copy actions" "search search search";gap:11px 12px
+      grid-template-columns:46px minmax(0,1fr) auto!important;
+      grid-template-areas:"icon copy actions" "search search search"!important;gap:12px 14px!important
     }
-    #workspaceInventory .manager-search{grid-column:1/-1}
+    #workspaceInventory .workspace-inventory-heading>.manager-search{width:100%;min-width:0}
   }
-  @media(max-width:620px){
+  @media(max-width:700px){
     #projectManagerView .project-manager-heading,
-    #projectManagerView #workspaceNotes .workspace-notes-heading{padding:13px!important;gap:10px!important;border-radius:16px!important}
+    #projectManagerView #workspaceNotes .workspace-notes-heading{padding:14px!important;gap:10px!important;border-radius:17px!important}
     #projectManagerView .manager-page-icon,#workspaceInventory .manager-page-icon{width:42px;height:42px;border-radius:13px}
     #projectManagerView .manager-page-icon svg,#workspaceInventory .manager-page-icon svg{width:21px;height:21px}
+    #projectManagerView .manager-heading-copy .project-manager-page-title{font-size:27px!important}
     #projectManagerView .project-manager-heading>.project-section-actions,
     #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions{gap:5px!important}
     #projectManagerView .project-manager-heading>.project-section-actions .ui-action,
     #projectManagerView #workspaceNotes .workspace-notes-heading>.workspace-notes-actions .ui-action,
-    #workspaceInventory .project-manager-actions .ui-action{min-height:40px!important;padding:7px 9px!important;font-size:11px!important}
+    #workspaceInventory .project-manager-actions .ui-action{min-height:42px!important;padding:8px 10px!important;font-size:11px!important}
     #workspaceNotes #workspaceAddNote{width:150px!important}
-    #projectManagerView .project-manager-heading>.project-status-filters,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters{padding:3px!important;flex-wrap:wrap!important;overflow:visible!important;width:100%!important;justify-content:flex-start!important}
     #projectManagerView .project-manager-heading>.project-status-filters .project-status-filter,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters button{min-height:32px!important;padding:5px 8px!important;font-size:10px!important}
-    #projectManagerView .manager-sort-label{max-width:min(68vw,280px)!important}
+    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters button{min-height:35px!important;padding:7px 9px!important;font-size:11px!important}
+    #projectManagerView .manager-sort-label{max-width:min(68vw,300px)!important}
     #projectManagerView .manager-sort-label select{max-width:42vw!important}
-    #workspaceInventory .inventory-manager-toolbar{padding:13px!important;border-radius:16px!important}
-    #workspaceInventory .workspace-inventory-heading{grid-template-columns:42px minmax(0,1fr) auto;gap:10px}
-    #workspaceInventory .manager-search{min-height:42px}
+    #workspaceInventory .inventory-manager-toolbar{padding:14px!important;border-radius:17px!important}
+    #workspaceInventory .workspace-inventory-heading{grid-template-columns:42px minmax(0,1fr) auto!important;gap:10px!important}
+    #workspaceInventory .manager-search{min-height:44px}
   }
 </style>
-<style id="project-filter-grid-repair-v12327">
-  /* Keep the second-row filter and view controls in their named desktop grid areas. */
-  @media(min-width:1121px){
-    #projectManagerView .project-manager-heading>.project-status-filters,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-notes-filters{
-      grid-column:1/4!important;grid-row:2!important
-    }
-    #projectManagerView .project-manager-heading>.manager-view-controls,
-    #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-view-controls{
-      grid-column:4!important;grid-row:2!important
-    }
-  }
-  #projectManagerView #pmCloudAccount{min-height:62px;padding:9px 9px;gap:9px}
+<style id="workspace-account-card-polish-v12328">
+  #projectManagerView #pmCloudAccount{min-height:62px;padding:9px 10px;gap:10px}
   #projectManagerView .workspace-sync-avatar{width:36px;height:36px;flex:0 0 36px}
   #projectManagerView .workspace-sync-copy{min-width:0}
-  #projectManagerView .workspace-sync-copy small{gap:4px;font-size:9px}
+  #projectManagerView .workspace-sync-copy small{gap:5px;font-size:9px}
   #projectManagerView .workspace-sync-copy small span{min-width:0;font-size:9px}
   @media(max-width:700px){
     #projectManagerView #pmCloudAccount{min-height:58px}
