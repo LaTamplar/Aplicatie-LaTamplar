@@ -42,7 +42,7 @@ export function openModels({models,onChange}){
   async function convertSketchUp(file){
     const buffer=await file.arrayBuffer();if(closed)throw Error('Conversie anulată.');
     return new Promise((resolve,reject)=>{
-      const worker=new Worker(new URL('./vendor/skp-worker.js?v=1.25.6',import.meta.url),{type:'module'});
+      const worker=new Worker(new URL('./vendor/skp-worker.js?v=1.25.8',import.meta.url),{type:'module'});
       let settled=false;
       function finish(error,value){if(settled)return;settled=true;clearTimeout(timer);worker.terminate();conversion=null;error?reject(error):resolve(value);}
       const timer=setTimeout(()=>finish(Error('Modelul este prea complex pentru conversia pe acest dispozitiv. Folosește o copie GLB pregătită pe PC.')),45000);
