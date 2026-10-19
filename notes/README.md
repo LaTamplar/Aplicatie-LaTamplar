@@ -1,4 +1,14 @@
-# Notițe A4 — 1.22.9
+# Notițe A4 — 1.23.29
+
+## 1.23.29 — Redesign compact și desen fluid
+
+- Pagina Proiecte folosește un header compact și filtrele se rearanjează în mai multe rânduri când nu încap, fără să ascundă Favorite.
+- Editorul păstrează toate comenzile și reduce înălțimea barelor pe tablete; panoul de pagini și controalele rămân accesibile în portrait și landscape.
+- La redimensionare sau rotirea ecranului, editorul păstrează punctul documentului aflat sub centrul suprafeței; gestul de pan pornește din coordonatele pointerului curent.
+- Trasarea activă se desenează pe un canvas transparent separat. Evenimentele coalesced sunt grupate pe cadru, iar stratul de bază nu mai este redat pentru fiecare mișcare a evidențiatorului.
+- Trasările libere folosesc curbe quadratice; coordonatele și presiunea salvate rămân datele primare. Coordonatele previzionate nu se persistă.
+- Normalizarea traseelor folosește o parcurgere incrementală a punctelor, fără extinderea unei liste mari ca argumente de funcție.
+- Verificat în Edge headless: Proiecte și editor la 390×844, 768×1024, 820×1180, 1024×768, 1180×820 și 1440×1000; desen simulat, autosave, Undo/Redo, zoom și export PDF. Apple Pencil fizic și Safari pe iPadOS necesită verificare pe dispozitiv.
 
 ## 1.22.9 — Audit vizual și texte unitare
 
