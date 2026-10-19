@@ -222,3 +222,8 @@
 @media(max-width:1000px){#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-top{grid-template-columns:minmax(0,1fr)}}
 #projectManagerView#projectManagerView :is(.project-card,.an-note-card){border-radius:18px!important;border-color:#dce5ee!important;background:#fff!important;box-shadow:0 4px 18px #203e5c08!important}
 #projectManagerView#projectManagerView .an-note-project{display:inline-flex!important;width:fit-content!important;max-width:100%;align-self:flex-start}
+
+/* Note cards: two useful counts; actions always sit at the right edge. */
+#projectManagerView#projectManagerView .an-note-card .project-card-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+#projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr) auto!important}
+#projectManagerView#projectManagerView .an-note-card .an-card-actions{justify-self:end;justify-content:flex-end;margin-left:auto}
