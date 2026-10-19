@@ -3442,3 +3442,99 @@
   .an-editor .an-toolbar .an-modes>[data-mode],
   .an-editor .an-toolbar .an-context .an-choice-button{transition:none!important}
 }
+
+
+/* v1.24.4 — Fit toolbar groups to their content and prevent edge clipping. */
+.an-editor .an-toolbar .an-modes{
+  flex:0 1 auto!important;width:max-content!important;max-width:100%!important;justify-content:flex-start!important
+}
+.an-editor .an-toolbar .an-modes>[data-mode]{
+  flex:0 0 auto!important;width:auto!important;min-width:0!important;padding-inline:13px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil],
+.an-editor .an-toolbar .an-context[data-mode=shape]{
+  grid-template-columns:max-content max-content max-content max-content!important;
+  grid-template-areas:"tools palette clear history"!important;justify-content:start!important;
+  column-gap:7px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field{
+  width:max-content!important;max-width:100%!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field>.an-choice-buttons,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field>.an-choice-buttons{
+  width:max-content!important;max-width:100%!important;justify-content:flex-start!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field .an-choice-button,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field .an-choice-button{
+  flex:0 0 auto!important;padding-inline:10px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-color-field,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-color-field{
+  justify-content:flex-start!important;padding-left:7px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-context-history,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-context-history{
+  justify-content:flex-start!important;padding-left:7px!important
+}
+.an-editor .an-toolbar .an-context-history>.an-button{min-width:34px!important;padding-inline:5px!important;font-size:9px!important}
+.an-editor .an-toolbar .an-context[data-mode=text]{
+  grid-template-columns:155px 92px 88px 116px 38px 38px max-content max-content!important;
+  grid-template-areas:"preset font size style alignment list palette history"!important;
+  justify-content:start!important;column-gap:6px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{
+  width:max-content!important;max-width:100%!important;justify-content:flex-start!important;padding:0 0 0 7px!important
+}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field>.an-color-swatches{justify-content:flex-start!important}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field>.an-choice-heading .an-current-color{display:none!important}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-context-history{justify-content:flex-start!important;padding-left:7px!important}
+@container note-toolbar (max-width:1080px){
+  .an-editor .an-toolbar .an-context[data-mode=pencil],
+  .an-editor .an-toolbar .an-context[data-mode=shape]{
+    grid-template-columns:minmax(210px,1fr) max-content max-content!important;
+    grid-template-areas:"tools tools tools" "palette clear history"!important;
+    justify-content:stretch!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field{width:100%!important;max-width:none!important}
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field>.an-choice-buttons,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field>.an-choice-buttons{
+    width:100%!important;max-width:none!important;justify-content:space-between!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field .an-choice-button,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field .an-choice-button{flex:1 1 0!important;padding-inline:clamp(5px,1vw,10px)!important}
+  .an-editor .an-toolbar .an-context[data-mode=text]{
+    grid-template-columns:minmax(118px,1.5fr) minmax(76px,.9fr) minmax(76px,.9fr) minmax(100px,1.1fr) 38px 38px!important;
+    grid-template-areas:"preset font size style alignment list" "palette palette palette palette palette history"!important;
+    justify-content:stretch!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{width:100%!important}
+}
+@media(max-width:1080px){
+  .an-editor .an-toolbar .an-context[data-mode=pencil],
+  .an-editor .an-toolbar .an-context[data-mode=shape]{
+    grid-template-columns:minmax(210px,1fr) max-content max-content!important;
+    grid-template-areas:"tools tools tools" "palette clear history"!important;
+    justify-content:stretch!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field{width:100%!important;max-width:none!important}
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field>.an-choice-buttons,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field>.an-choice-buttons{
+    width:100%!important;max-width:none!important;justify-content:space-between!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field .an-choice-button,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field .an-choice-button{flex:1 1 0!important;padding-inline:clamp(5px,1vw,10px)!important}
+  .an-editor .an-toolbar .an-context[data-mode=text]{
+    grid-template-columns:minmax(118px,1.5fr) minmax(76px,.9fr) minmax(76px,.9fr) minmax(100px,1.1fr) 38px 38px!important;
+    grid-template-areas:"preset font size style alignment list" "palette palette palette palette palette history"!important;
+    justify-content:stretch!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{width:100%!important}
+}
+@media(pointer:coarse){
+  .an-editor .an-toolbar .an-modes>[data-mode]{padding-inline:10px!important}
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-choice-field .an-choice-button,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-choice-field .an-choice-button{padding-inline:clamp(5px,1vw,10px)!important}
+}
