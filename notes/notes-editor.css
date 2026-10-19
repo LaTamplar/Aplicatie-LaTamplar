@@ -3475,3 +3475,42 @@
  .an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row,
  .an-editor .an-toolbar.an-toolbar.an-toolbar .an-context:is([data-mode=text],[data-mode=pencil],[data-mode=shape]){width:min(100%,700px)!important}
 }
+
+/* v1.24.9 — Keep every navigation button inside one evenly padded frame. */
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row{
+ display:flex!important;align-items:center!important;gap:6px!important;box-sizing:border-box!important;
+ height:56px!important;min-height:56px!important;max-height:none!important;padding:5px!important;
+ border:1px solid #d8e3ed!important;border-radius:15px!important;background:#fbfdff!important;
+ overflow:visible!important;box-shadow:0 2px 8px rgba(32,62,89,.035)!important
+}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes{
+ display:flex!important;flex:1 1 auto!important;align-items:center!important;gap:4px!important;
+ height:44px!important;min-height:44px!important;max-height:44px!important;min-width:0!important;
+ margin:0!important;padding:0!important;border:0!important;border-radius:0!important;
+ background:transparent!important;box-shadow:none!important;overflow:visible!important
+}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle,
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]{
+ position:relative!important;box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+ height:44px!important;min-height:44px!important;max-height:44px!important;margin:0!important;
+ padding:0 9px!important;gap:7px!important;border:1px solid transparent!important;border-radius:10px!important;
+ background:transparent!important;color:#52697d!important;box-shadow:none!important;transform:none!important;
+ font-size:11px!important;font-weight:650!important;line-height:1!important;white-space:nowrap!important
+}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle{flex:0 0 84px!important;width:84px!important;min-width:84px!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]{flex:1 1 auto!important;min-width:0!important;width:auto!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle>span{position:static!important;width:auto!important;height:auto!important;clip:auto!important;clip-path:none!important;overflow:visible!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle svg,
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode] svg{width:16px!important;height:16px!important;min-width:16px!important;flex:0 0 16px!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]::before{display:none!important;content:none!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle[aria-expanded=true],
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode][aria-pressed=true]{
+ background:#e4f0fa!important;border-color:#aacbe5!important;color:#286298!important;
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.8)!important;transform:none!important
+}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]:focus-visible,
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle:focus-visible{outline:2px solid #397db7!important;outline-offset:-3px!important}
+@media(hover:hover){
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]:hover:not([aria-pressed=true]),
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle:hover:not([aria-expanded=true]){background:#f0f5fa!important;border-color:#e2eaf2!important;box-shadow:none!important}
+}
