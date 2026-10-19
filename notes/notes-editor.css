@@ -3457,3 +3457,21 @@
 }
 
 .an-editor .an-toolbar.an-toolbar.an-toolbar .an-context[data-mode=text]>.an-field{min-height:44px!important;max-height:44px!important}
+
+/* v1.24.8 — Shared edges for navigation and instrument docks. */
+.an-editor .an-toolbar.an-toolbar.an-toolbar{--an-dock-width:700px}
+.an-editor .an-toolbar.an-toolbar.an-toolbar.an-text-toolbar{--an-dock-width:960px}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row,
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-context:is([data-mode=text],[data-mode=pencil],[data-mode=shape]){
+ width:min(100%,var(--an-dock-width))!important;max-width:100%!important;margin-inline:auto!important;box-sizing:border-box!important
+}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes{flex:1 1 auto!important;width:auto!important}
+.an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]{flex:1 1 auto!important;padding-inline:10px!important}
+@container note-toolbar (max-width:1080px){
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row,
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-context:is([data-mode=text],[data-mode=pencil],[data-mode=shape]){width:min(100%,700px)!important}
+}
+@media(orientation:portrait) and (max-width:1100px){
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row,
+ .an-editor .an-toolbar.an-toolbar.an-toolbar .an-context:is([data-mode=text],[data-mode=pencil],[data-mode=shape]){width:min(100%,700px)!important}
+}
