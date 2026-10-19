@@ -1,0 +1,11 @@
+# Browser SketchUp import
+
+The runtime is `models/vendor/skp-worker.js`, a self-contained ES module worker. No server, native SDK or remote conversion endpoint is used. Only the generated self-contained GLB is saved by the existing project storage callbacks. The original SKP is never uploaded by the converter.
+
+Pinned runtime sources: OpenSKP 1.3.0, earcut 3.0.2 and fflate 0.8.2 (MIT). See `models/vendor/SKP-NOTICES.txt`. OpenSKP registry tarball SHA-512: `YSQPGVzBOSEbAgIWA+oOUMyKzcuUCLoDzRis8sF7VPa2SM9PcZyt11YyRH84VDOSSL8TPtqJaEAF12wFNkxAWw==`.
+
+To rebuild in an isolated directory, extract the OpenSKP package to `package/`, install the pinned earcut/fflate/flatbuffers 25.9.23 dependencies in `node_modules/`, and place both supplied build files alongside `package/`. Run `node build-worker.cjs`, then `esbuild worker-entry.mjs --bundle --platform=browser --format=esm --minify --target=es2020 --outfile=skp-worker.js` with esbuild 0.25.12. The patch script fails if expected upstream source statements change. FlatBuffers and unused exports are removed by tree shaking.
+
+Adapters retain material names, hidden instances, tag metadata, metre geometry units and linear material colour factors. Embedded textures are included. Existing viewer fallback feature outlines remain in use.
+
+Input and converted GLB limits: 25 MB each; aggregate project model budget: 50 MB. Conversion is terminated after 45 seconds or immediately when the viewer closes. Failed conversions do not save a partial record. Some SketchUp containers are not supported by this reader: the supplied wardrobe is verified against the native SketchUp SDK (3200 x 2100 x 542 mm, tags Layer0/Sertare/Usi, K365/P100); the earlier kitchen SKP triggers a reader allocation error and must currently use a prepared GLB. Conversion errors are surfaced as a simple compatibility message. Never label a failed or partial conversion as successful.

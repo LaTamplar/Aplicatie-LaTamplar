@@ -29,12 +29,26 @@ export function openModels({models,onChange}){
   dialog.setAttribute('aria-labelledby','modelTitle');
   dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2></div><div class="model-header-actions"><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
   <div class="model-body"><aside class="model-side"><section><h3>În acest proiect</h3><div data-model-list></div></section><section><h3>Tag-uri SketchUp</h3><p data-tag-help class="model-muted">Tag-urile apar după deschiderea unui model.</p><div data-tags></div></section><section class="model-part"><h3>Piesă și material</h3><p data-part>Atinge o suprafață pentru detalii.</p></section></aside>
-  <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><span data-result aria-live="polite"></span></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Adaugă copia .glb pregătită pe PC. Originalul SketchUp rămâne separat.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p></section></div>
-  <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".glb" data-file hidden>`;
+  <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><span data-result aria-live="polite"></span></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Alege un fișier SketchUp .skp sau un model .glb. Conversia SketchUp se face automat pe acest dispozitiv.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p></section></div>
+  <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".skp,.glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
   let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
+  let conversion=null;
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
+  async function convertSketchUp(file){
+    const buffer=await file.arrayBuffer();if(closed)throw Error('Conversie anulată.');
+    return new Promise((resolve,reject)=>{
+      const worker=new Worker(new URL('./vendor/skp-worker.js?v=1.25.5',import.meta.url),{type:'module'});
+      let settled=false;
+      function finish(error,value){if(settled)return;settled=true;clearTimeout(timer);worker.terminate();conversion=null;error?reject(error):resolve(value);}
+      const timer=setTimeout(()=>finish(Error('Modelul este prea complex pentru conversia pe acest dispozitiv. Folosește o copie GLB pregătită pe PC.')),45000);
+      conversion={cancel:()=>finish(Error('Conversie anulată.'))};
+      worker.onmessage=({data})=>{if(data.error)finish(Error(data.error));else if(data.buffer)finish(null,new File([data.buffer],file.name.replace(/\.skp$/i,'.glb'),{type:'model/gltf-binary'}));};
+      worker.onerror=()=>finish(Error('Conversia SketchUp nu a reușit pe acest dispozitiv. Poți folosi în continuare o copie GLB.'));
+      worker.postMessage(buffer,[buffer]);
+    });
+  }
   function message(text){status.textContent=text;}
   function render(){
     if(closed||!renderer||!camera)return;
@@ -167,12 +181,14 @@ export function openModels({models,onChange}){
   $(dialog,'[data-clear]').onclick=clearMeasurement;
   $(dialog,'[data-add]').onclick=()=>fileInput.click();
   fileInput.onchange=async()=>{
-    const file=fileInput.files[0];fileInput.value='';if(!file||busy)return;
-    if(!/\.glb$/i.test(file.name))return message('Pregătește întâi copia .glb pe PC. Fișierul .skp original nu se deschide direct aici.');
+    let file=fileInput.files[0];fileInput.value='';if(!file||busy)return;
+    if(!/\.(skp|glb)$/i.test(file.name))return message('Alege un fișier SketchUp .skp sau un model .glb.');
     if(file.size>MAX_BYTES)return message('Alege un model de cel mult 25 MB.');
-    if(items.reduce((n,x)=>n+(x.size||0),0)+file.size>MAX_TOTAL)return message('Modelele unui proiect pot ocupa cel mult 50 MB.');
-    busy=true;list();message('Se verifică modelul…');
-    try{const buffer=await file.arrayBuffer();const test=await parse(buffer);dispose(test);const dataUrl=await toDataUrl(file);if(closed)return;
+    busy=true;list();message(/\.skp$/i.test(file.name)?'Se convertește modelul SketchUp pe acest dispozitiv…':'Se verifică modelul…');
+    try{if(/\.skp$/i.test(file.name))file=await convertSketchUp(file);if(closed)return;
+      if(file.size>MAX_BYTES)throw Error('Copia convertită depășește limita de 25 MB.');
+      if(items.reduce((n,x)=>n+(x.size||0),0)+file.size>MAX_TOTAL)throw Error('Modelele unui proiect pot ocupa cel mult 50 MB.');
+      const buffer=await file.arrayBuffer();const test=await parse(buffer);dispose(test);const dataUrl=await toDataUrl(file);if(closed)return;
       const record={id:crypto.randomUUID?.()||`model-${Date.now()}`,name:file.name.replace(/\.glb$/i,''),size:file.size,dataUrl,createdAt:new Date().toISOString()};
       const next=[...items,record];await onChange(next);if(closed)return;items=next;busy=false;await load(record);
     }catch(error){message('Modelul nu a fost adăugat: '+error.message);}finally{busy=false;if(!closed)list();}
@@ -183,6 +199,6 @@ export function openModels({models,onChange}){
     busy=true;list();try{const next=items.filter(x=>x.id!==activeId);await onChange(next);if(closed)return;items=next;reset();activeId=null;$(dialog,'.model-empty').hidden=false;busy=false;if(items.length)await load(items[0]);else message('Modelul a fost eliminat din proiect.');}catch(error){message('Nu am putut salva modificarea: '+error.message);}finally{busy=false;if(!closed)list();}
   };
   const observer=new ResizeObserver(resize);observer.observe(canvasHost);
-  function close(){if(closed)return;closed=true;generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
+  function close(){if(closed)return;closed=true;conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
   $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});list();if(items.length)load(items[0]);
 }
