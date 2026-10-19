@@ -193,3 +193,32 @@
 #projectManagerView .an-note-card-stats{background:#f5f8fb;border:0;border-radius:12px;padding:10px;gap:8px}
 #projectManagerView .an-note-card-stats>span{background:transparent;color:#6d8499;font-size:11px}
 #projectManagerView .inventory-card-dimensions{background:#f5f8fb;border-radius:12px;padding:10px;color:#5e7890}
+/* Notes use the same card anatomy and sizing as projects. */
+#projectManagerView#projectManagerView .an-note-card{padding:0;display:flex;flex-direction:column;gap:0;height:auto;min-height:0;border-radius:18px;overflow:visible}
+#projectManagerView#projectManagerView .an-note-card .an-note-open{margin:0;padding:0;width:100%;height:164px;min-height:164px;border:0;border-radius:17px 17px 0 0;overflow:hidden;background:#f1f5f9;box-shadow:none}
+#projectManagerView#projectManagerView .an-note-open canvas{width:100%;height:164px;border:0;border-radius:0;object-fit:contain}
+#projectManagerView#projectManagerView .an-note-card .project-card-body{display:flex;flex-direction:column;gap:16px;padding:16px;flex:1}
+#projectManagerView#projectManagerView .an-note-card .project-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+#projectManagerView#projectManagerView .an-note-card-heading{display:block;margin:0;padding:0;min-width:0}
+#projectManagerView#projectManagerView .an-note-card-title{font-size:16px;font-weight:700;max-width:100%;margin:0;white-space:normal;overflow-wrap:anywhere;letter-spacing:-.02em;line-height:1.35}
+#projectManagerView#projectManagerView .an-note-date{font-size:11px;color:#8091a1;margin:5px 0 0}
+#projectManagerView#projectManagerView .an-note-project{font-size:10px;margin:7px 0 0;padding:4px 7px;max-width:100%}
+#projectManagerView#projectManagerView .an-note-card :is(.an-note-card-menu,.an-favorite-button){position:relative;top:auto;right:auto;order:initial;margin:0;flex:none}
+#projectManagerView#projectManagerView .an-note-card .an-card-actions{position:static;display:flex;gap:7px;align-items:center;flex:none}
+#projectManagerView#projectManagerView .an-note-card :is(.an-favorite-button,.an-note-card-menu summary){width:40px;min-width:40px;height:40px;min-height:40px;border:1px solid #e4ebf2;border-radius:11px;background:#fff;box-shadow:none}
+#projectManagerView#projectManagerView .an-note-card .an-favorite-button.is-active{background:#fff7df;border-color:#f2dfac;color:#bd8b27}
+#projectManagerView#projectManagerView .an-note-grid.manager-list-view .an-note-card{display:grid;grid-template-columns:156px minmax(0,1fr);grid-template-rows:minmax(166px,auto);min-height:166px}
+#projectManagerView#projectManagerView .an-note-grid.manager-list-view .an-note-open{grid-column:1;grid-row:1;height:100%;min-height:166px;border-radius:17px 0 0 17px}
+#projectManagerView#projectManagerView .an-note-grid.manager-list-view .an-note-open canvas{height:100%;min-height:166px}
+#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-body{grid-column:2;grid-row:1;padding:18px 20px;justify-content:center;gap:14px}
+#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-stats{max-width:470px;min-height:60px;padding:8px 0}
+@media(max-width:1000px){#projectManagerView#projectManagerView .an-note-grid.manager-list-view .an-note-card{grid-template-columns:120px minmax(0,1fr)}#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-body{padding:14px;gap:12px}#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-top{flex-direction:column}}
+@media(max-width:440px){#projectManagerView#projectManagerView .an-note-grid.manager-list-view .an-note-card{grid-template-columns:88px minmax(0,1fr)}}
+#projectManagerView#projectManagerView :is(.project-grid,#workspaceNotesList.an-note-grid){grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:16px;grid-auto-rows:auto}
+#projectManagerView#projectManagerView :is(.project-grid,#workspaceNotesList.an-note-grid).manager-list-view{grid-template-columns:minmax(0,1fr)}
+#projectManagerView#projectManagerView .an-note-card .an-note-open,#projectManagerView#projectManagerView .an-note-open canvas{height:176px;min-height:176px}
+#projectManagerView#projectManagerView .an-note-card .project-card-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+@container(max-width:350px){#projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:1000px){#projectManagerView#projectManagerView .an-note-grid.manager-list-view .project-card-top{grid-template-columns:minmax(0,1fr)}}
+#projectManagerView#projectManagerView :is(.project-card,.an-note-card){border-radius:18px!important;border-color:#dce5ee!important;background:#fff!important;box-shadow:0 4px 18px #203e5c08!important}
+#projectManagerView#projectManagerView .an-note-project{display:inline-flex!important;width:fit-content!important;max-width:100%;align-self:flex-start}

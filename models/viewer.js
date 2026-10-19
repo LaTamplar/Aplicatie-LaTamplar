@@ -1,4 +1,5 @@
 import * as THREE from './vendor/three.module.js';
+import { openSticky } from './sticky.js?v=1.25.10';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.25.6';
@@ -35,7 +36,7 @@ export function openModels({models,onChange,getNotes,onNote}){
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
   let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
-  let conversion=null;
+  let conversion=null,sticky=null;const lifecycle=new AbortController();
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let snapPoint=createSnapper();
   const mm=value=>new Intl.NumberFormat('ro-RO',{maximumFractionDigits:1}).format(value);
@@ -43,16 +44,15 @@ export function openModels({models,onChange,getNotes,onNote}){
   async function refreshNotes(){
     if(!getNotes||!activeId)return;const id=activeId,host=$(dialog,'[data-model-notes]');
     try{const notes=await getNotes(id);if(closed||id!==activeId)return;host.replaceChildren();
-      if(!notes.length){const p=document.createElement('p');p.className='model-muted';p.textContent='Notează modificările pe o captură a modelului, cu text sau Apple Pencil.';host.append(p);}
+      if(!notes.length){const p=document.createElement('p');p.className='model-muted';p.textContent='Un bilețel mic pentru idei și modificări, lângă model.';host.append(p);}
       for(const note of notes.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''))){const b=document.createElement('button');b.type='button';b.className='model-note-entry';b.textContent=note.title;b.onclick=()=>startNote(note.id);host.append(b);}
     }catch{message('Lista notițelor nu a putut fi încărcată. Redeschide modelul pentru a reîncerca.');}
   }
   async function startNote(noteId){
     if(!onNote||!root||busy)return;const model=items.find(m=>m.id===activeId);if(!model)return;
-    let snapshot;
-    try{if(!noteId){render();const source=renderer.domElement,c=document.createElement('canvas'),scale=Math.min(1,1400/source.width);c.width=Math.round(source.width*scale);c.height=Math.round(source.height*scale);const ctx=c.getContext('2d');ctx.fillStyle='#f1f5f9';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(source,0,0,c.width,c.height);snapshot={src:c.toDataURL('image/jpeg',.9),width:c.width,height:c.height};}
-      dialog.close();await onNote({model,snapshot,noteId,onClose:async()=>{if(closed)return;dialog.showModal();resize();await refreshNotes();$(dialog,'[data-note]').focus();}});
-    }catch(error){if(!closed&&!dialog.open)dialog.showModal();message('Notița nu a putut fi deschisă: '+error.message);}
+    try{if(sticky)await sticky.close();const record=noteId?(await getNotes(model.id)).find(n=>n.id===noteId):null;if(noteId&&!record)throw Error('Bilețelul nu mai este disponibil.');
+      sticky=openSticky({host:canvasHost,record,save:async data=>{const note=await onNote({model,...data});refreshNotes();return note;},onClose:()=>{sticky=null;$(dialog,'[data-note]').focus();},onError:error=>message('Bilețelul nu a fost salvat: '+error.message)});
+    }catch(error){message('Bilețelul nu poate fi deschis: '+error.message);}
   }
   $(dialog,'[data-note]').onclick=()=>startNote();
   async function convertSketchUp(file){
@@ -161,7 +161,7 @@ export function openModels({models,onChange,getNotes,onNote}){
     camera.near=Math.max(distance/10000,.00001);camera.far=Math.max(distance*100,100);camera.updateProjectionMatrix();controls.minDistance=distance*.001;controls.maxDistance=distance*30;controls.update();fit(true);
   }
   async function load(model){
-    if(busy||closed)return;busy=true;const token=++generation;list();message('Se deschide modelul…');
+    if(busy||closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}busy=true;const token=++generation;list();message('Se deschide modelul…');
     try{
       const response=await fetch(model.dataUrl);const buffer=await response.arrayBuffer();
       if(buffer.byteLength>MAX_BYTES)throw Error('Modelul depășește limita de 25 MB.');
@@ -229,6 +229,6 @@ export function openModels({models,onChange,getNotes,onNote}){
     busy=true;list();try{const next=items.filter(x=>x.id!==activeId);await onChange(next);if(closed)return;items=next;reset();activeId=null;$(dialog,'.model-empty').hidden=false;busy=false;if(items.length)await load(items[0]);else message('Modelul a fost eliminat din proiect.');}catch(error){message('Nu am putut salva modificarea: '+error.message);}finally{busy=false;if(!closed)list();}
   };
   const observer=new ResizeObserver(resize);observer.observe(canvasHost);
-  function close(){if(closed)return;closed=true;conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
-  $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});list();if(items.length)load(items[0]);
+  async function close(){if(closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}closed=true;lifecycle.abort();conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
+  $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();if(sticky)sticky.close().catch(error=>message(error.message));else close();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&!closed)sticky?.flush().catch(error=>message(error.message));},{signal:lifecycle.signal});list();if(items.length)load(items[0]);
 }
