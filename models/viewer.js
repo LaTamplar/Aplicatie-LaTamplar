@@ -51,9 +51,10 @@ export function openModels({models,onChange}){
     canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
     scene.add(new THREE.HemisphereLight(0xffffff,0x9caab8,1.7));const light=new THREE.DirectionalLight(0xffffff,1.8);light.position.set(4,8,5);scene.add(light);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.addEventListener('change',render);
-    renderer.domElement.addEventListener('pointerdown',e=>{pointerStart={x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()};});
-    renderer.domElement.addEventListener('pointerup',e=>{const p=pointerStart;pointerStart=null;if(p&&p.id===e.pointerId&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&performance.now()-p.time<650)pick(e);});
-    renderer.domElement.addEventListener('pointercancel',()=>{pointerStart=null;});resize();
+    const pointers=new Set();let multiGesture=false;
+    renderer.domElement.addEventListener('pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1){multiGesture=false;pointerStart=e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()}:null;}else{multiGesture=true;pointerStart=null;}});
+    renderer.domElement.addEventListener('pointerup',e=>{pointers.delete(e.pointerId);const p=pointerStart;pointerStart=null;if(!multiGesture&&p&&p.id===e.pointerId&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&performance.now()-p.time<650)pick(e);if(!pointers.size)multiGesture=false;});
+    renderer.domElement.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);pointerStart=null;if(!pointers.size)multiGesture=false;});resize();
   }
   function list(){
     const host=$(dialog,'[data-model-list]');host.replaceChildren();
