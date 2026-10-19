@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.25.6">
+<link rel="stylesheet" href="./models/viewer.css?v=1.25.7">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.25.6';
+      const APP_VERSION = '1.25.7';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6192,7 +6192,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const images = Array.isArray(payload?.images) ? payload.images : [];
         const stats = {
           images: images.length,
-          notes: countProjectNotes(images)
+          notes: countProjectNotes(images),
+          models: Array.isArray(payload?.models) ? payload.models.length : 0
         };
         return {
           id: options.id || createProjectId(),
@@ -6526,7 +6527,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
               thumbnail: getProjectThumbnail(nextPayload.images),
               stats: {
                 images: Array.isArray(nextPayload.images) ? nextPayload.images.length : 0,
-                notes: countProjectNotes(Array.isArray(nextPayload.images) ? nextPayload.images : [])
+                notes: countProjectNotes(Array.isArray(nextPayload.images) ? nextPayload.images : []),
+                models: Array.isArray(nextPayload.models) ? nextPayload.models.length : 0
               },
               payload: nextPayload
             };
@@ -6544,6 +6546,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
               || record?.thumbnail !== nextRecord.thumbnail
               || record?.stats?.images !== nextRecord.stats.images
               || record?.stats?.notes !== nextRecord.stats.notes
+              || record?.stats?.models !== nextRecord.stats.models
               || existingPayloadImages.length !== normalizedPayloadImages.length
               || existingActiveImageIndex !== normalizedActiveImageIndex
               || JSON.stringify(existingPayloadImages) !== JSON.stringify(normalizedPayloadImages)
@@ -6813,6 +6816,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           || activeTouches.size
           || activePencilEditorStroke
           || floatingToolbarDragging
+          || Date.now() - lastPenDrawingActivityAt < 1800
+          || window.atelierNotes?.manager?.editor?.isBusy()
         );
       }
 
@@ -6982,7 +6987,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.25.6');
+          const viewer = await import('./models/viewer.js?v=1.25.7');
           const projectId = activeProjectId;
           viewer.openModels({ models: projectModels, onChange: async (models) => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -7413,6 +7418,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           noteStat.textContent = `${notesCount} ${notesCount === 1 ? 'notă' : 'note'}`;
           stats.appendChild(imageStat);
           stats.appendChild(noteStat);
+          const modelStat = document.createElement('div');
+          modelStat.className = 'project-stat';
+          const modelsCount = Array.isArray(record?.payload?.models) ? record.payload.models.length : Number(record?.stats?.models || 0);
+          modelStat.textContent = `${modelsCount} ${modelsCount === 1 ? 'model 3D' : 'modele 3D'}`;
+          stats.appendChild(modelStat);
 
           body.appendChild(top);
           body.appendChild(stats);
@@ -12269,7 +12279,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.24.5"></script>
+<script src="notes/notes-editor.js?v=1.25.7"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.5">
 <script src="inventory/inventory.js?v=1.24.5"></script>
 
@@ -13376,7 +13386,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.25.6">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.25.7">
 </body>
 </html>
 

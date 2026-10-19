@@ -143,3 +143,6 @@
 @media(max-width:600px){
  .an-editor .an-toolbar.an-toolbar.an-toolbar.an-toolbar .an-context[data-mode=text]>.an-field>.an-text-style-group{width:108px!important;min-width:108px!important}
 }
+
+#projectManagerView#projectManagerView .project-card-stats{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+#projectManagerView .project-stat{min-width:0;text-align:center;font-variant-numeric:tabular-nums}
