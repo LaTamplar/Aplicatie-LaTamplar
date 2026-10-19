@@ -3750,3 +3750,65 @@
   .an-editor .an-toolbar .an-context[data-mode=shape]>.an-clear-shapes,
   .an-editor .an-toolbar .an-context-history>.an-button{height:42px!important;min-height:42px!important}
 }
+
+
+/* v1.24.6 — Center the palette and align actions to the trailing edge on wide toolbars. */
+.an-editor .an-toolbar .an-context[data-mode=pencil],
+.an-editor .an-toolbar .an-context[data-mode=shape]{
+  grid-template-columns:max-content minmax(max-content,1fr) max-content max-content!important;
+  justify-content:stretch!important
+}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-color-field,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-color-field{justify-self:center!important}
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-clear-drawing,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-clear-shapes,
+.an-editor .an-toolbar .an-context[data-mode=pencil]>.an-context-history,
+.an-editor .an-toolbar .an-context[data-mode=shape]>.an-context-history{justify-self:end!important}
+.an-editor .an-toolbar .an-context[data-mode=text]{
+  grid-template-columns:118px 78px 76px 104px 38px 38px minmax(max-content,1fr) max-content!important;
+  justify-content:stretch!important
+}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{justify-self:center!important}
+.an-editor .an-toolbar .an-context[data-mode=text]>.an-context-history{justify-self:end!important}
+@container note-toolbar (max-width:880px){
+  .an-editor .an-toolbar .an-context[data-mode=pencil],
+  .an-editor .an-toolbar .an-context[data-mode=shape]{
+    grid-template-columns:minmax(0,1fr) auto auto!important;
+    grid-template-areas:"tools tools tools" "palette clear history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-color-field,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-color-field{justify-self:start!important}
+  .an-editor .an-toolbar .an-context[data-mode=text]{
+    grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1fr) 38px 38px!important;
+    grid-template-areas:"preset font size style alignment list" "palette palette palette palette history history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{justify-self:start!important}
+}
+@media(max-width:880px){
+  .an-editor .an-toolbar .an-context[data-mode=pencil],
+  .an-editor .an-toolbar .an-context[data-mode=shape]{
+    grid-template-columns:minmax(0,1fr) auto auto!important;
+    grid-template-areas:"tools tools tools" "palette clear history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-color-field,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-color-field{justify-self:start!important}
+  .an-editor .an-toolbar .an-context[data-mode=text]{
+    grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1fr) 38px 38px!important;
+    grid-template-areas:"preset font size style alignment list" "palette palette palette palette history history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{justify-self:start!important}
+}
+@media(orientation:portrait) and (max-width:1100px){
+  .an-editor .an-toolbar .an-context[data-mode=pencil],
+  .an-editor .an-toolbar .an-context[data-mode=shape]{
+    grid-template-columns:minmax(0,1fr) auto auto!important;
+    grid-template-areas:"tools tools tools" "palette clear history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=pencil]>.an-color-field,
+  .an-editor .an-toolbar .an-context[data-mode=shape]>.an-color-field{justify-self:start!important}
+  .an-editor .an-toolbar .an-context[data-mode=text]{
+    grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1fr) 38px 38px!important;
+    grid-template-areas:"preset font size style alignment list" "palette palette palette palette history history"!important
+  }
+  .an-editor .an-toolbar .an-context[data-mode=text]>.an-color-field{justify-self:start!important}
+}
