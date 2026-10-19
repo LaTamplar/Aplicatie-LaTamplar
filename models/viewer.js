@@ -33,11 +33,14 @@ export function openModels({models,onChange}){
   <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
-  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
+  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   function message(text){status.textContent=text;}
   function render(){
     if(closed||!renderer||!camera)return;
+    // Keep useful depth precision on close, nearly coplanar cabinet surfaces.
+    const distance=camera.position.distanceTo(controls.target),near=Math.max(.00001,Math.min(distance*.005,clipRadius*.01)),far=Math.max(10,clipRadius*8,distance+clipRadius*4);
+    if(camera.near!==near||camera.far!==far){camera.near=near;camera.far=far;camera.updateProjectionMatrix();}
     renderer.render(scene,camera);
     const label=$(dialog,'[data-distance]');
     if(points.length===2){const p=points[0].clone().add(points[1]).multiplyScalar(.5).project(camera);label.style.left=`${(p.x*.5+.5)*canvasHost.clientWidth}px`;label.style.top=`${(-p.y*.5+.5)*canvasHost.clientHeight}px`;label.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;}
@@ -79,6 +82,7 @@ export function openModels({models,onChange}){
     // must not make a kitchen tiny. Nothing is removed; Încadrează still shows all.
     if(focus===true){const coords=[[],[],[]],p=new THREE.Vector3();root.traverse(o=>{if(!o.isMesh||!visible(o))return;const a=o.geometry.attributes.position,step=Math.max(1,Math.ceil(a.count/1500));for(let i=0;i<a.count;i+=step){p.fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld);coords[0].push(p.x);coords[1].push(p.y);coords[2].push(p.z);}});if(coords[0].length>500){coords.forEach(a=>a.sort((a,b)=>a-b));const n=coords[0].length;box.min.set(...coords.map(a=>a[Math.floor(n*.01)]));box.max.set(...coords.map(a=>a[Math.min(n-1,Math.ceil(n*.99))]));}}
     const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),radius=Math.max(size.length()/2,.001);
+    clipRadius=radius;
     const direction=camera.position.clone().sub(controls.target).normalize();
     if(direction.lengthSq()<.5)direction.set(1,.72,1).normalize();
     const right=new THREE.Vector3().crossVectors(camera.up,direction).normalize(),up=new THREE.Vector3().crossVectors(direction,right);
@@ -90,7 +94,7 @@ export function openModels({models,onChange}){
   }
   function tagPanel(){
     const host=$(dialog,'[data-tags]');host.replaceChildren();const metadata=[];root.traverse(o=>{if(Array.isArray(o.userData.sketchupTags))metadata.push(...o.userData.sketchupTags);});
-    if(!metadata.length){$(dialog,'[data-tag-help]').textContent='Acest GLB nu conține tag-uri SketchUp. Copia pregătită pe PC le păstrează.';return;}
+    if(!metadata.length){$(dialog,'[data-tag-help]').textContent='Exportul GLB nu include tag-urile originale. Pentru Uși, Sertare sau alte tag-uri, folosește copia Atelier pregătită din fișierul .skp.';return;}
     metadata.forEach(t=>tags.set(t.name,t.visible!==false));
     function apply(){root.traverse(o=>{o.visible=!o.userData.sketchupHidden&&(tags.get(o.userData.sketchupTag)!==false);});clearMeasurement();clearSelection();render();}
     const counts=new Map();root.traverse(o=>{if(!o.isMesh)return;const assigned=new Set();for(let p=o;p;p=p.parent){const t=p.userData.sketchupTag;if(t)assigned.add(t);}for(const t of assigned)counts.set(t,(counts.get(t)||0)+1);});
@@ -129,8 +133,9 @@ export function openModels({models,onChange}){
       if(closed||token!==generation){dispose(next);return;}
       reset();root=next;scene.add(root);prepareAppearance();activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();initialView();$(dialog,'[data-fit]').disabled=false;
       let scaled=false;root.traverse(o=>{if(o.userData.atelierModel===1&&o.userData.measurementUnits==='mm')scaled=true;});
-      $(dialog,'[data-measure]').disabled=!scaled;
-      message(scaled?'Trage pentru rotire · două degete pentru deplasare și zoom · atinge o piesă pentru material.':'Model 3D deschis. Măsurarea necesită copia pregătită pe PC cu scara verificată.');
+      // glTF 2 defines metres for geometry; no proprietary marker is required.
+      $(dialog,'[data-measure]').disabled=false;
+      message(scaled?'Trage pentru rotire · două degete pentru deplasare și zoom · atinge o piesă pentru material.':'Rotire și zoom disponibile · măsurile în mm folosesc scara exportată în GLB.');
     }catch(error){message('Modelul nu poate fi deschis: '+error.message);}
     finally{busy=false;if(!closed)list();}
   }

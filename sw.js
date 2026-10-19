@@ -1,15 +1,15 @@
-const CACHE_NAME = 'fisa-atelier-v325';
+const CACHE_NAME = 'fisa-atelier-v326';
 const APP_FILES = [
   './',
   './index.html',
-  './workspace-polish.css?v=1.25.3',
-  './sw.js?v=1.25.3',
+  './workspace-polish.css?v=1.25.4',
+  './sw.js?v=1.25.4',
   './notes/notes-editor.css?v=1.24.10',
   './notes/notes-editor.js?v=1.24.10',
   './inventory/inventory.css?v=1.24.10',
   './inventory/inventory.js?v=1.24.10',
-  './models/viewer.css?v=1.25.3',
-  './models/viewer.js?v=1.25.3',
+  './models/viewer.css?v=1.25.4',
+  './models/viewer.js?v=1.25.4',
   './models/vendor/three.module.js',
   './models/vendor/three.core.min.js',
   './models/vendor/OrbitControls.js',
