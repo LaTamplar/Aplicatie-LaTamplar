@@ -33,7 +33,7 @@ export function openModels({models,onChange}){
   <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
-  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
+  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   function message(text){status.textContent=text;}
   function render(){
@@ -45,11 +45,16 @@ export function openModels({models,onChange}){
   function resize(){if(!renderer)return;const w=canvasHost.clientWidth,h=canvasHost.clientHeight;if(!w||!h)return;renderer.setSize(w,h);const aspect=w/h,factor=Math.min(1,camera.aspect)/Math.min(1,aspect);camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target);camera.aspect=aspect;camera.updateProjectionMatrix();render();}
   function init(){
     if(renderer)return;
-    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1.1;
     renderer.domElement.setAttribute('aria-label','Model 3D: trage pentru rotire, folosește două degete pentru zoom și deplasare');
     renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();message('Vizualizarea 3D a fost întreruptă de dispozitiv. Închide și redeschide modelul.');});
     canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
-    scene.add(new THREE.HemisphereLight(0xffffff,0xa0aaba,1.15));const light=new THREE.DirectionalLight(0xffffff,1.5);light.position.set(4,8,5);scene.add(light);
+    // Neutral studio illumination is generated locally once; no HDR download,
+    // material recolouring, shadow passes or continuous animation are needed.
+    const studio=new THREE.Scene(),room=new THREE.Mesh(new THREE.BoxGeometry(12,12,12),new THREE.MeshBasicMaterial({color:0xbfc3c8,side:THREE.BackSide}));studio.add(room);
+    for(const [x,y,z,w,h,power] of [[0,5.8,0,7,7,3],[-5.8,2,0,5,7,2],[5.8,2,0,5,7,2],[0,1,5.8,7,6,1.6]]){const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:new THREE.Color().setScalar(power),side:THREE.DoubleSide}));panel.position.set(x,y,z);panel.lookAt(0,0,0);studio.add(panel);}
+    const pmrem=new THREE.PMREMGenerator(renderer);environment=pmrem.fromScene(studio,.08,.1,30);scene.environment=environment.texture;scene.environmentIntensity=.85;pmrem.dispose();dispose(studio);
+    scene.add(new THREE.HemisphereLight(0xffffff,0xc3c6ca,.45));const light=new THREE.DirectionalLight(0xffffff,1.35);light.position.set(4,8,5);scene.add(light);const fill=new THREE.DirectionalLight(0xffffff,.55);fill.position.set(-5,3,-4);scene.add(fill);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.addEventListener('change',render);
     const pointers=new Set();let multiGesture=false;
     renderer.domElement.addEventListener('pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1){multiGesture=false;pointerStart=e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()}:null;}else{multiGesture=true;pointerStart=null;}});
@@ -98,12 +103,12 @@ export function openModels({models,onChange}){
   }
   async function parse(buffer){unpack(buffer);return (await new GLTFLoader().parseAsync(buffer,'')).scene;}
   function prepareAppearance(){
-    let originalEdges=false;root.traverse(o=>{if(o.isLineSegments){originalEdges=true;o.material.color.set(0x536171);o.material.transparent=true;o.material.opacity=.42;}});
+    let originalEdges=false;root.traverse(o=>{if(o.isLineSegments){originalEdges=true;o.material.color.set(0x34383e);o.material.transparent=true;o.material.opacity=.14;o.material.depthWrite=false;}});
     const surfaces=[];root.traverse(o=>{if(o.isMesh)surfaces.push(o);});
     for(const o of surfaces){
       for(const m of (Array.isArray(o.material)?o.material:[o.material])){m.polygonOffset=true;m.polygonOffsetFactor=1;m.polygonOffsetUnits=1;}
       // Existing attached copies also regain clear component boundaries.
-      if(!originalEdges){const edges=new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry,30),new THREE.LineBasicMaterial({color:0x536171,transparent:true,opacity:.58}));edges.userData.atelierOutline=true;o.add(edges);}
+      if(!originalEdges){const edges=new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry,30),new THREE.LineBasicMaterial({color:0x34383e,transparent:true,opacity:.23,depthWrite:false}));edges.userData.atelierOutline=true;o.add(edges);}
     }
   }
   function initialView(){
@@ -173,6 +178,6 @@ export function openModels({models,onChange}){
     busy=true;list();try{const next=items.filter(x=>x.id!==activeId);await onChange(next);if(closed)return;items=next;reset();activeId=null;$(dialog,'.model-empty').hidden=false;busy=false;if(items.length)await load(items[0]);else message('Modelul a fost eliminat din proiect.');}catch(error){message('Nu am putut salva modificarea: '+error.message);}finally{busy=false;if(!closed)list();}
   };
   const observer=new ResizeObserver(resize);observer.observe(canvasHost);
-  function close(){if(closed)return;closed=true;generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
+  function close(){if(closed)return;closed=true;generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
   $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});list();if(items.length)load(items[0]);
 }

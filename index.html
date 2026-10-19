@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.25.1">
+<link rel="stylesheet" href="./models/viewer.css?v=1.25.2">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.25.1';
+      const APP_VERSION = '1.25.2';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6982,7 +6982,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.25.1');
+          const viewer = await import('./models/viewer.js?v=1.25.2');
           const projectId = activeProjectId;
           viewer.openModels({ models: projectModels, onChange: async (models) => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -13376,6 +13376,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
+<link rel="stylesheet" href="./workspace-polish.css?v=1.25.2">
 </body>
 </html>
 
