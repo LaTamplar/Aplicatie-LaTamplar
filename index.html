@@ -4792,7 +4792,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.24.9';
+      const APP_VERSION = '1.24.10';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -13200,6 +13200,128 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView #workspaceNotes .workspace-notes-heading>.manager-page-icon{display:none!important;}
     #projectManagerView .manager-heading-copy .project-manager-page-title{font-size:25px!important;}
   }
+</style>
+
+
+
+
+
+
+
+
+
+<style id="manager-headers-v12410">
+#projectManagerView#projectManagerView>.project-manager-content,#projectManagerView#projectManagerView>#workspaceNotes,#projectManagerView#projectManagerView>#workspaceInventory{container:manager-panel / inline-size;min-width:0}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading),#projectManagerView#projectManagerView #workspaceInventory .inventory-manager-toolbar{
+ box-sizing:border-box!important;padding:20px!important;margin:0 0 18px!important;border:1px solid #dce5ee!important;
+ border-radius:20px!important;background:linear-gradient(150deg,#fff,#f9fbfe)!important;
+ box-shadow:0 6px 22px rgba(36,65,94,.045)!important
+}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading){
+ display:grid!important;grid-template-columns:44px minmax(0,1fr) auto!important;
+ grid-template-areas:"icon copy actions" "search search search" "filters filters controls"!important;
+ align-items:center!important;gap:14px 12px!important
+}
+#projectManagerView#projectManagerView .manager-page-icon{
+ grid-area:icon!important;display:grid!important;place-items:center!important;width:44px!important;height:44px!important;
+ border:1px solid #dce7f1!important;border-radius:12px!important;background:#f4f8fc!important;box-shadow:none!important
+}
+#projectManagerView#projectManagerView .manager-page-icon svg{width:22px!important;height:22px!important}
+#projectManagerView#projectManagerView .manager-heading-copy{grid-area:copy!important;min-width:0!important}
+#projectManagerView#projectManagerView .manager-heading-copy .project-manager-page-title{margin:0!important;font-size:32px!important;line-height:1.15!important;letter-spacing:-.025em!important}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>.manager-search{grid-area:search!important}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>.project-section-actions{grid-area:actions!important}
+#projectManagerView#projectManagerView .project-section-actions{display:flex!important;align-items:center!important;gap:8px!important;justify-content:flex-end!important;flex-wrap:nowrap!important;margin:0!important}
+#projectManagerView#projectManagerView .project-section-actions .ui-action{
+ min-width:0!important;width:auto!important;height:44px!important;min-height:44px!important;padding:0 14px!important;gap:8px!important;
+ border-radius:11px!important;font-size:12px!important;font-weight:650!important;line-height:1.1!important;
+ box-shadow:none!important;white-space:nowrap!important
+}
+#projectManagerView#projectManagerView .project-section-actions .ui-action-secondary{background:#f2f5f8!important;border:1px solid #dce4ed!important;color:#3c536c!important}
+#projectManagerView#projectManagerView .project-section-actions .ui-action-primary{background:#315f91!important;border:1px solid #315f91!important;color:#fff!important;box-shadow:0 3px 8px #315f9114!important}
+#projectManagerView#projectManagerView #workspaceAddNote{min-width:142px!important}
+#projectManagerView#projectManagerView .manager-search{
+ box-sizing:border-box!important;min-width:0!important;width:100%!important;min-height:44px!important;height:44px!important;
+ margin:0!important;padding:0 13px!important;gap:9px!important;border:1px solid #dce5ee!important;
+ border-radius:11px!important;background:#fff!important;box-shadow:none!important;position:relative!important
+}
+#projectManagerView#projectManagerView .manager-search input{box-sizing:border-box!important;width:100%!important;min-width:0!important;height:42px!important;min-height:42px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;font-size:12px!important}
+#projectManagerView#projectManagerView .manager-search svg{position:static!important;flex:0 0 16px!important;width:16px!important;height:16px!important}
+#projectManagerView#projectManagerView .manager-search:focus-within{border-color:#8daecc!important;box-shadow:0 0 0 3px #315f9110!important}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>:is(.project-status-filters,.manager-notes-filters){
+ grid-area:filters!important;display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:5px!important;
+ min-width:0!important;width:auto!important;max-width:100%!important;margin:0!important;padding:0!important;
+ border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important
+}
+#projectManagerView#projectManagerView :is(.project-status-filter,.manager-notes-filters button){
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+ flex:0 0 auto!important;min-width:0!important;height:40px!important;min-height:40px!important;padding:0 10px!important;
+ border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;
+ color:#5e7288!important;box-shadow:none!important;font-size:11px!important;font-weight:600!important;white-space:nowrap!important
+}
+#projectManagerView#projectManagerView :is(.project-status-filter,.manager-notes-filters button)[aria-pressed=true]{background:#e5eff9!important;border-color:#c5d9ec!important;color:#285e91!important;box-shadow:none!important}
+#projectManagerView#projectManagerView .manager-filter-count{min-width:20px!important;height:20px!important;padding:0 5px!important;border-radius:6px!important;background:#edf2f7!important;color:#60758c!important;font-size:10px!important}
+#projectManagerView#projectManagerView [aria-pressed=true]>.manager-filter-count{background:#fff!important;color:#315f91!important}
+#projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>.manager-view-controls{
+ grid-area:controls!important;display:flex!important;align-items:center!important;justify-self:end!important;gap:9px!important;
+ width:auto!important;min-width:0!important;height:44px!important;min-height:44px!important;
+ margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+}
+#projectManagerView#projectManagerView .manager-sort-label{
+ box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:7px!important;height:44px!important;min-height:44px!important;
+ padding:0 10px!important;border:1px solid #dce5ee!important;border-radius:11px!important;background:#fff!important;box-shadow:none!important;font-size:10px!important;color:#75869a!important
+}
+#projectManagerView#projectManagerView .manager-sort-label select{width:145px!important;max-width:145px!important;height:42px!important;min-height:42px!important;margin:0!important;padding:0 4px!important;background:transparent!important;border:0!important;box-shadow:none!important;font-size:11px!important;color:#354f6c!important}
+#projectManagerView#projectManagerView .manager-layout-switch{box-sizing:border-box!important;display:flex!important;align-items:center!important;height:44px!important;min-height:44px!important;padding:3px!important;gap:3px!important;border:1px solid #dce5ee!important;border-radius:11px!important;background:#f5f8fb!important}
+#projectManagerView#projectManagerView .manager-layout-switch button{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;padding:0!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#70859a!important;font-size:18px!important;box-shadow:none!important}
+#projectManagerView#projectManagerView .manager-layout-switch button[aria-pressed=true]{background:#fff!important;color:#315f91!important;box-shadow:0 1px 4px #25384b16!important}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading{display:grid!important;grid-template-columns:44px minmax(0,1fr) auto!important;grid-template-areas:"icon copy actions"!important;gap:12px!important;align-items:center!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.project-section-actions{grid-area:actions!important}
+#projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folder] .inventory-search-panel{
+ padding:16px 0 0!important;margin:16px 0 0!important;gap:14px!important;
+ border:0!important;border-top:1px solid #e7edf4!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+}
+#projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folder] .inventory-search-row{gap:12px!important}
+#projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folder] .inventory-search-row>.manager-search input{padding:0!important;border:0!important;box-shadow:none!important}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-breadcrumb>button{height:44px!important;min-height:44px!important;border-radius:11px!important;box-shadow:none!important}
+#projectManagerView#projectManagerView #workspaceInventory .inventory-dimension-filters{gap:10px!important;padding-top:0!important;border:0!important}
+#projectManagerView#projectManagerView #workspaceInventory .inventory-filter-field{gap:6px!important;font-size:10px!important;color:#73859a!important;letter-spacing:.04em!important}
+#projectManagerView#projectManagerView #workspaceInventory .inventory-filter-field :is(input,select){height:44px!important;min-height:44px!important;border:1px solid #dce5ee!important;border-radius:11px!important;background:#fff!important;box-shadow:none!important;font-size:12px!important}
+@container manager-panel (min-width:1050px){
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading){grid-template-columns:44px max-content minmax(200px,1fr) auto!important;grid-template-areas:"icon copy search actions" "filters filters filters controls"!important;gap:16px!important}
+}
+@container manager-panel (max-width:900px){
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading){grid-template-areas:"icon copy actions" "search search search" "filters filters filters" "controls controls controls"!important;gap:12px 9px!important}
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>.manager-view-controls{justify-self:end!important}
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading),#projectManagerView#projectManagerView #workspaceInventory .inventory-manager-toolbar{padding:16px!important}
+ #projectManagerView#projectManagerView .manager-heading-copy .project-manager-page-title{font-size:28px!important}
+ #projectManagerView#projectManagerView .project-section-actions .ui-action{padding-inline:11px!important;font-size:11px!important}
+}
+@container manager-panel (max-width:460px){
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading){grid-template-columns:36px minmax(0,1fr)!important;grid-template-areas:"icon copy" "actions actions" "search search" "filters filters" "controls controls"!important}
+ #projectManagerView#projectManagerView :is(.project-manager-heading,#workspaceNotes .workspace-notes-heading)>.project-section-actions{justify-self:end!important}
+ #projectManagerView#projectManagerView .manager-sort-label{gap:4px!important;padding-inline:8px!important}
+ #projectManagerView#projectManagerView .manager-sort-label select{width:133px!important;max-width:133px!important}
+}
+@media(hover:hover){
+ #projectManagerView#projectManagerView :is(.project-status-filter,.manager-notes-filters button):hover:not([aria-pressed=true]){background:#edf3f9!important;color:#315f91!important}
+}
+
+
+#projectManagerView#projectManagerView>#workspaceNotes{box-sizing:border-box;padding-inline:32px!important}
+#projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading>.project-section-actions{display:none!important}
+#projectManagerView#projectManagerView [data-project-status-filter=all]::before{background:#315f91!important}
+@media(max-width:900px){#projectManagerView#projectManagerView>#workspaceNotes{padding-inline:16px!important}}
+
+
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading{
+ grid-template-columns:44px minmax(0,1fr) auto!important;grid-template-rows:auto!important;
+ grid-template-areas:"icon copy actions" "search search search"!important;row-gap:14px!important
+}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-heading-copy{grid-area:copy!important;width:auto!important;min-width:0!important}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.project-section-actions{grid-area:actions!important;width:auto!important;justify-self:end!important}
+#projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
+#projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
 </body>
 </html>
