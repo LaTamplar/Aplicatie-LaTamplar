@@ -42,14 +42,14 @@ export function openModels({models,onChange}){
     const label=$(dialog,'[data-distance]');
     if(points.length===2){const p=points[0].clone().add(points[1]).multiplyScalar(.5).project(camera);label.style.left=`${(p.x*.5+.5)*canvasHost.clientWidth}px`;label.style.top=`${(-p.y*.5+.5)*canvasHost.clientHeight}px`;label.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;}
   }
-  function resize(){if(!renderer)return;const w=canvasHost.clientWidth,h=canvasHost.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();render();}
+  function resize(){if(!renderer)return;const w=canvasHost.clientWidth,h=canvasHost.clientHeight;if(!w||!h)return;renderer.setSize(w,h);const aspect=w/h,factor=Math.min(1,camera.aspect)/Math.min(1,aspect);camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target);camera.aspect=aspect;camera.updateProjectionMatrix();render();}
   function init(){
     if(renderer)return;
     renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
     renderer.domElement.setAttribute('aria-label','Model 3D: trage pentru rotire, folosește două degete pentru zoom și deplasare');
     renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();message('Vizualizarea 3D a fost întreruptă de dispozitiv. Închide și redeschide modelul.');});
     canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
-    scene.add(new THREE.HemisphereLight(0xffffff,0x9caab8,1.7));const light=new THREE.DirectionalLight(0xffffff,1.8);light.position.set(4,8,5);scene.add(light);
+    scene.add(new THREE.HemisphereLight(0xffffff,0xa0aaba,1.15));const light=new THREE.DirectionalLight(0xffffff,1.5);light.position.set(4,8,5);scene.add(light);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.addEventListener('change',render);
     const pointers=new Set();let multiGesture=false;
     renderer.domElement.addEventListener('pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1){multiGesture=false;pointerStart=e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()}:null;}else{multiGesture=true;pointerStart=null;}});
@@ -66,12 +66,17 @@ export function openModels({models,onChange}){
   function clearSelection(){if(selection){scene.remove(selection);dispose(selection);selection=null;}}
   function reset(){clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');$(dialog,'[data-part]').textContent='Atinge o suprafață pentru detalii.';}
   function visible(object){for(let o=object;o;o=o.parent)if(!o.visible)return false;return true;}
-  function fit(){
+  function fit(focus=false){
     if(!root)return;root.updateMatrixWorld(true);const box=new THREE.Box3();
     root.traverse(o=>{if(o.isMesh&&visible(o)){o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
     if(box.isEmpty())return message('Nu există geometrie vizibilă. Activează un tag pentru a vedea modelul.');
+    // Frame the main geometry on opening; a handful of distant leftover vertices
+    // must not make a kitchen tiny. Nothing is removed; Încadrează still shows all.
+    if(focus===true){const coords=[[],[],[]],p=new THREE.Vector3();root.traverse(o=>{if(!o.isMesh||!visible(o))return;const a=o.geometry.attributes.position,step=Math.max(1,Math.ceil(a.count/1500));for(let i=0;i<a.count;i+=step){p.fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld);coords[0].push(p.x);coords[1].push(p.y);coords[2].push(p.z);}});if(coords[0].length>500){coords.forEach(a=>a.sort((a,b)=>a-b));const n=coords[0].length;box.min.set(...coords.map(a=>a[Math.floor(n*.01)]));box.max.set(...coords.map(a=>a[Math.min(n-1,Math.ceil(n*.99))]));}}
     const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),radius=Math.max(size.length()/2,.001);
-    const direction=new THREE.Vector3(1,.72,1).normalize(),right=new THREE.Vector3(1,0,-1).normalize(),up=new THREE.Vector3().crossVectors(direction,right);
+    const direction=camera.position.clone().sub(controls.target).normalize();
+    if(direction.lengthSq()<.5)direction.set(1,.72,1).normalize();
+    const right=new THREE.Vector3().crossVectors(camera.up,direction).normalize(),up=new THREE.Vector3().crossVectors(direction,right);
     const tanV=Math.tan(THREE.MathUtils.degToRad(camera.fov/2)),tanH=tanV*camera.aspect;
     let distance=radius;
     for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const corner=new THREE.Vector3(x,y,z).sub(center),depth=corner.dot(direction);distance=Math.max(distance,depth+Math.abs(corner.dot(right))/tanH,depth+Math.abs(corner.dot(up))/tanV);}
@@ -83,12 +88,33 @@ export function openModels({models,onChange}){
     if(!metadata.length){$(dialog,'[data-tag-help]').textContent='Acest GLB nu conține tag-uri SketchUp. Copia pregătită pe PC le păstrează.';return;}
     metadata.forEach(t=>tags.set(t.name,t.visible!==false));
     function apply(){root.traverse(o=>{o.visible=!o.userData.sketchupHidden&&(tags.get(o.userData.sketchupTag)!==false);});clearMeasurement();clearSelection();render();}
-    const counts=new Map();root.traverse(o=>{const t=o.userData.sketchupTag;if(t)counts.set(t,(counts.get(t)||0)+1);});
-    $(dialog,'[data-tag-help]').textContent='Afișează sau ascunde tag-urile originale. Un tag gol nu schimbă imaginea.';
-    for(const [name,checked] of tags){const label=document.createElement('label');label.className='model-tag';const input=document.createElement('input');input.type='checkbox';input.checked=checked;input.onchange=()=>{tags.set(name,input.checked);apply();};const span=document.createElement('span');span.textContent=name==='Layer0'?'Untagged · Layer0':name;span.title=name;const count=document.createElement('small');count.textContent=counts.has(name)?'':'gol';label.append(input,span,count);host.append(label);}
+    const counts=new Map();root.traverse(o=>{if(!o.isMesh)return;const assigned=new Set();for(let p=o;p;p=p.parent){const t=p.userData.sketchupTag;if(t)assigned.add(t);}for(const t of assigned)counts.set(t,(counts.get(t)||0)+1);});
+    const used=[...tags].filter(([name])=>counts.has(name)),unused=[...tags].filter(([name])=>!counts.has(name));
+    $(dialog,'[data-tag-help]').textContent=`${used.length} tag-uri cu suprafețe. Debifează un tag pentru a ascunde piesele atribuite în SketchUp.`;
+    const empty=document.createElement('details');empty.className='model-empty-tags';const summary=document.createElement('summary');summary.textContent=`Fără suprafețe (${unused.length})`;empty.append(summary);
+    for(const [name,checked] of [...used,...unused]){const label=document.createElement('label');label.className='model-tag';const input=document.createElement('input');input.type='checkbox';input.checked=checked;input.disabled=!counts.has(name);input.onchange=()=>{tags.set(name,input.checked);apply();message(`Tag „${name}”: ${input.checked?'afișat':'ascuns'}.`);};const span=document.createElement('span');span.textContent=name==='Layer0'?'Untagged · Layer0':name;span.title=name;const count=document.createElement('small');count.textContent=counts.has(name)?String(counts.get(name)):'gol';label.append(input,span,count);(counts.has(name)?host:empty).append(label);}
+    if(unused.length)host.append(empty);
     apply();
   }
   async function parse(buffer){unpack(buffer);return (await new GLTFLoader().parseAsync(buffer,'')).scene;}
+  function prepareAppearance(){
+    let originalEdges=false;root.traverse(o=>{if(o.isLineSegments){originalEdges=true;o.material.color.set(0x536171);o.material.transparent=true;o.material.opacity=.42;}});
+    const surfaces=[];root.traverse(o=>{if(o.isMesh)surfaces.push(o);});
+    for(const o of surfaces){
+      for(const m of (Array.isArray(o.material)?o.material:[o.material])){m.polygonOffset=true;m.polygonOffsetFactor=1;m.polygonOffsetUnits=1;}
+      // Existing attached copies also regain clear component boundaries.
+      if(!originalEdges){const edges=new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry,30),new THREE.LineBasicMaterial({color:0x536171,transparent:true,opacity:.58}));edges.userData.atelierOutline=true;o.add(edges);}
+    }
+  }
+  function initialView(){
+    let saved;root.traverse(o=>{if(o.userData.sketchupCamera)saved=o.userData.sketchupCamera;});
+    if(!saved||![saved.eye,saved.target,saved.up].every(a=>Array.isArray(a)&&a.length===3&&a.every(Number.isFinite)))return fit(true);
+    camera.position.fromArray(saved.eye);controls.target.fromArray(saved.target);camera.up.fromArray(saved.up).normalize();
+    camera.position.sub(controls.target).multiplyScalar(1.3/Math.min(1,camera.aspect)).add(controls.target);
+    const distance=camera.position.distanceTo(controls.target);
+    if(distance<.001||camera.up.lengthSq()<.5)return fit();
+    camera.near=Math.max(distance/10000,.00001);camera.far=Math.max(distance*100,100);camera.updateProjectionMatrix();controls.minDistance=distance*.001;controls.maxDistance=distance*30;controls.update();fit(true);
+  }
   async function load(model){
     if(busy||closed)return;busy=true;const token=++generation;list();message('Se deschide modelul…');
     try{
@@ -96,7 +122,7 @@ export function openModels({models,onChange}){
       if(buffer.byteLength>MAX_BYTES)throw Error('Modelul depășește limita de 25 MB.');
       init();const next=await parse(buffer);
       if(closed||token!==generation){dispose(next);return;}
-      reset();root=next;scene.add(root);activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();fit();$(dialog,'[data-fit]').disabled=false;
+      reset();root=next;scene.add(root);prepareAppearance();activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();initialView();$(dialog,'[data-fit]').disabled=false;
       let scaled=false;root.traverse(o=>{if(o.userData.atelierModel===1&&o.userData.measurementUnits==='mm')scaled=true;});
       $(dialog,'[data-measure]').disabled=!scaled;
       message(scaled?'Trage pentru rotire · două degete pentru deplasare și zoom · atinge o piesă pentru material.':'Model 3D deschis. Măsurarea necesită copia pregătită pe PC cu scara verificată.');

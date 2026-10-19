@@ -19,11 +19,11 @@ class Converter:
         self.call('SUInitialize', [], None)()
         self.model = Ref()
         self.bin = bytearray()
-        self.doc = dict(asset={'version':'2.0','generator':'Atelier Fisa local preparer 1.0'}, scene=0,
+        self.doc = dict(asset={'version':'2.0','generator':'Atelier Fisa local preparer 1.1'}, scene=0,
             scenes=[], nodes=[], meshes=[], materials=[], textures=[], images=[], bufferViews=[], accessors=[],
             samplers=[{'wrapS':10497,'wrapT':10497,'magFilter':9729,'minFilter':9987}])
         self.tags = {}; self.material_ids = {}; self.texture_scales = {}; self.cache = {}
-        self.stats = {'faces':0,'triangles':0,'meshes':0,'textures':0}
+        self.stats = {'faces':0,'triangles':0,'meshes':0,'textures':0,'edges':0}
 
     def call(self, name, args, rest=C.c_int):
         f = getattr(self.api, name); f.argtypes=args; f.restype=rest; return f
@@ -159,6 +159,32 @@ class Converter:
                 'NORMAL':self.accessor(b['n'],5126,'VEC3',n),'TEXCOORD_0':self.accessor(b['uv'],5126,'VEC2',n)},
                 'indices':self.accessor(b['i'],5125,'SCALAR',len(b['i'])),'material':mat}
             self.doc['meshes'].append({'primitives':[primitive]}); result.append((len(self.doc['meshes'])-1,tag,hidden))
+        # Export the original hard edges, not triangulation diagonals. These define
+        # cabinet doors and drawers even when adjacent faces share the same paint.
+        count=C.c_size_t()
+        self.check(self.call('SUEntitiesGetNumEdges',[Ref,C.c_bool,C.POINTER(C.c_size_t)])(owner,False,C.byref(count)))
+        edges=(Ref*count.value)(); got=C.c_size_t()
+        if count.value:
+            self.check(self.call('SUEntitiesGetEdges',[Ref,C.c_bool,C.c_size_t,C.POINTER(Ref),C.POINTER(C.c_size_t)])(owner,False,count,edges,C.byref(got)))
+        lines={}
+        for edge in list(edges)[:got.value]:
+            drawing=self.call('SUEdgeToDrawingElement',[Ref],Ref)(edge); meta=self.meta(drawing)
+            if meta['sketchupHidden'] or self.out('SUEdgeGetSoft',edge,C.c_bool).value or self.out('SUEdgeGetSmooth',edge,C.c_bool).value:continue
+            # Ignore construction strokes without a face; keep the model's surface outlines.
+            if not self.out('SUEdgeGetNumFaces',edge,C.c_size_t).value:continue
+            p=lines.setdefault(meta['sketchupTag'],[])
+            for endpoint in ['Start','End']:
+                vertex=self.out('SUEdgeGet'+endpoint+'Vertex',edge)
+                v=self.out('SUVertexGetPosition',vertex,Point); p.extend([v.x,v.y,v.z])
+            self.stats['edges']+=1
+        if lines:
+            edge_key=('edges',)
+            if edge_key not in self.material_ids:
+                self.material_ids[edge_key]=len(self.doc['materials'])
+                self.doc['materials'].append({'name':'Muchii SketchUp','pbrMetallicRoughness':{'baseColorFactor':[.07,.09,.12,1],'metallicFactor':0,'roughnessFactor':1}})
+            for tag,p in lines.items():
+                primitive={'mode':1,'attributes':{'POSITION':self.accessor(p,5126,'VEC3',len(p)//3,True)},'material':self.material_ids[edge_key]}
+                self.doc['meshes'].append({'primitives':[primitive]}); result.append((len(self.doc['meshes'])-1,tag,False))
         self.cache[key]=result; self.stats['meshes']+=len(result); return result
 
     def node(self, node):
@@ -195,8 +221,14 @@ class Converter:
         with tempfile.TemporaryDirectory(prefix='atelier-model-',dir=destination.parent) as temp:
             children=self.walk(self.out('SUModelGetEntities',self.model),None,temp)
         if not children:raise RuntimeError('Modelul nu contine suprafete 3D.')
+        extras={'atelierModel':1,'preparerVersion':2,'sourceUnits':'inch','measurementUnits':'mm','sketchupTags':tags}
+        camera=self.out('SUModelGetCamera',self.model)
+        eye=Point(); target=Point(); up=Point()
+        self.check(self.call('SUCameraGetOrientation',[Ref,C.POINTER(Point),C.POINTER(Point),C.POINTER(Point)])(camera,C.byref(eye),C.byref(target),C.byref(up)))
+        def axes(v,scale):return [v.x*scale,v.z*scale,-v.y*scale]
+        extras['sketchupCamera']={'eye':axes(eye,.0254),'target':axes(target,.0254),'up':axes(up,1)}
         root=self.node({'name':source.stem,'matrix':[.0254,0,0,0, 0,0,-.0254,0, 0,.0254,0,0, 0,0,0,1],
-            'children':children,'extras':{'atelierModel':1,'sourceUnits':'inch','measurementUnits':'mm','sketchupTags':tags}})
+            'children':children,'extras':extras})
         self.doc['scenes']=[{'nodes':[root]}]
         self.bin.extend(b'\0'*(-len(self.bin)%4)); self.doc['buffers']=[{'byteLength':len(self.bin)}]
         for key in ['textures','images','samplers']:
@@ -212,8 +244,17 @@ class Converter:
 
 def main():
     parser=argparse.ArgumentParser(description='Pregateste o copie GLB locala pentru Atelier Fisa. Originalul SKP ramane intact.')
-    parser.add_argument('source',type=pathlib.Path); parser.add_argument('--output',type=pathlib.Path); parser.add_argument('--sketchup-dll',type=pathlib.Path)
-    args=parser.parse_args(); source=args.source.resolve()
+    parser.add_argument('source',type=pathlib.Path,nargs='?'); parser.add_argument('--output',type=pathlib.Path); parser.add_argument('--sketchup-dll',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.source is None:
+        import tkinter as tk
+        from tkinter import filedialog
+        window=tk.Tk(); window.withdraw()
+        selected=filedialog.askopenfilename(title='Alege modelul SketchUp pentru Atelier Fisa',filetypes=[('Model SketchUp','*.skp')])
+        window.destroy()
+        if not selected:return
+        args.source=pathlib.Path(selected)
+    source=args.source.resolve()
     if source.suffix.lower()!='.skp' or not source.is_file():parser.error('Alege un fisier .skp existent.')
     destination=(args.output or source.with_name(source.stem+' - Atelier.glb')).resolve()
     if destination==source:parser.error('Destinatia trebuie sa fie diferita de original.')
