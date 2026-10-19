@@ -1,12 +1,19 @@
-const CACHE_NAME = 'fisa-atelier-v321';
+const CACHE_NAME = 'fisa-atelier-v322';
 const APP_FILES = [
   './',
   './index.html',
-  './sw.js?v=1.24.10',
+  './sw.js?v=1.25.0',
   './notes/notes-editor.css?v=1.24.10',
   './notes/notes-editor.js?v=1.24.10',
   './inventory/inventory.css?v=1.24.10',
   './inventory/inventory.js?v=1.24.10',
+  './models/viewer.css?v=1.25.0',
+  './models/viewer.js?v=1.25.0',
+  './models/vendor/three.module.js',
+  './models/vendor/three.core.min.js',
+  './models/vendor/OrbitControls.js',
+  './models/vendor/GLTFLoader.js',
+  './models/vendor/BufferGeometryUtils.js',
   './pdfjs-6.3.289.min.mjs',
   './pdfjs-worker-6.3.289.min.mjs',
   './notes/pdf-lib.min.js',
@@ -65,3 +72,4 @@ self.addEventListener('fetch', (event) => {
     }
   })());
 });
+
