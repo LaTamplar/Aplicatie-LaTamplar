@@ -23,13 +23,13 @@ function dispose(root){
   root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);for(const m of (Array.isArray(o.material)?o.material:[o.material]))if(m){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});
   geometry.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());textures.forEach(x=>{x.source?.data?.close?.();x.dispose();});
 }
-export function openModels({models,onChange}){
+export function openModels({models,onChange,getNotes,onNote}){
   const previous=document.getElementById('atelierModels');if(previous)return;
   const opener=document.activeElement;
   const dialog=document.createElement('dialog');dialog.id='atelierModels';dialog.className='atelier-models';
   dialog.setAttribute('aria-labelledby','modelTitle');
-  dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2></div><div class="model-header-actions"><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
-  <div class="model-body"><aside class="model-side"><section><h3>În acest proiect</h3><div data-model-list></div></section><section><h3>Tag-uri SketchUp</h3><p data-tag-help class="model-muted">Tag-urile apar după deschiderea unui model.</p><div data-tags></div></section><section class="model-part" aria-live="polite"><h3>Piesă și material</h3><p data-part>Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.</p><div data-dimensions hidden></div></section></aside>
+  dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2></div><div class="model-header-actions"><button type="button" data-note disabled>✎ Notează</button><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
+  <div class="model-body"><aside class="model-side"><section><h3>În acest proiect</h3><div data-model-list></div></section><section data-note-section><h3>Notițe pe model</h3><div data-model-notes></div></section><section><h3>Tag-uri SketchUp</h3><p data-tag-help class="model-muted">Tag-urile apar după deschiderea unui model.</p><div data-tags></div></section><section class="model-part" aria-live="polite"><h3>Piesă și material</h3><p data-part>Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.</p><div data-dimensions hidden></div></section></aside>
   <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><span data-result aria-live="polite"></span></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Alege un fișier SketchUp .skp sau un model .glb. Conversia SketchUp se face automat pe acest dispozitiv.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p></section></div>
   <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".skp,.glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
@@ -39,6 +39,22 @@ export function openModels({models,onChange}){
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let snapPoint=createSnapper();
   const mm=value=>new Intl.NumberFormat('ro-RO',{maximumFractionDigits:1}).format(value);
+  $(dialog,'[data-note]').hidden=!onNote;$(dialog,'[data-note-section]').hidden=!getNotes;
+  async function refreshNotes(){
+    if(!getNotes||!activeId)return;const id=activeId,host=$(dialog,'[data-model-notes]');
+    try{const notes=await getNotes(id);if(closed||id!==activeId)return;host.replaceChildren();
+      if(!notes.length){const p=document.createElement('p');p.className='model-muted';p.textContent='Notează modificările pe o captură a modelului, cu text sau Apple Pencil.';host.append(p);}
+      for(const note of notes.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''))){const b=document.createElement('button');b.type='button';b.className='model-note-entry';b.textContent=note.title;b.onclick=()=>startNote(note.id);host.append(b);}
+    }catch{message('Lista notițelor nu a putut fi încărcată. Redeschide modelul pentru a reîncerca.');}
+  }
+  async function startNote(noteId){
+    if(!onNote||!root||busy)return;const model=items.find(m=>m.id===activeId);if(!model)return;
+    let snapshot;
+    try{if(!noteId){render();const source=renderer.domElement,c=document.createElement('canvas'),scale=Math.min(1,1400/source.width);c.width=Math.round(source.width*scale);c.height=Math.round(source.height*scale);const ctx=c.getContext('2d');ctx.fillStyle='#f1f5f9';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(source,0,0,c.width,c.height);snapshot={src:c.toDataURL('image/jpeg',.9),width:c.width,height:c.height};}
+      dialog.close();await onNote({model,snapshot,noteId,onClose:async()=>{if(closed)return;dialog.showModal();resize();await refreshNotes();$(dialog,'[data-note]').focus();}});
+    }catch(error){if(!closed&&!dialog.open)dialog.showModal();message('Notița nu a putut fi deschisă: '+error.message);}
+  }
+  $(dialog,'[data-note]').onclick=()=>startNote();
   async function convertSketchUp(file){
     const buffer=await file.arrayBuffer();if(closed)throw Error('Conversie anulată.');
     return new Promise((resolve,reject)=>{
@@ -89,7 +105,7 @@ export function openModels({models,onChange}){
   }
   function clearMeasurement(){points=[];if(markerGroup){scene.remove(markerGroup);dispose(markerGroup);markerGroup=null;}$(dialog,'[data-result]').textContent='';$(dialog,'[data-distance]').hidden=true;$(dialog,'[data-clear]').disabled=true;render();}
   function clearSelection(){if(selection){scene.remove(selection);dispose(selection);selection=null;}$(dialog,'[data-dimensions]').hidden=true;$(dialog,'[data-part]').textContent='Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.';}
-  function reset(){clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
+  function reset(){clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-note]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
   function fit(focus=false){
     if(!root)return;root.updateMatrixWorld(true);const box=new THREE.Box3();
     root.traverse(o=>{if(o.isMesh&&visible(o)){o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
@@ -151,7 +167,7 @@ export function openModels({models,onChange}){
       if(buffer.byteLength>MAX_BYTES)throw Error('Modelul depășește limita de 25 MB.');
       init();const next=await parse(buffer);
       if(closed||token!==generation){dispose(next);return;}
-      reset();snapPoint=createSnapper();root=next;scene.add(root);prepareAppearance();activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();initialView();$(dialog,'[data-fit]').disabled=false;
+      reset();snapPoint=createSnapper();root=next;scene.add(root);prepareAppearance();activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();initialView();$(dialog,'[data-fit]').disabled=false;$(dialog,'[data-note]').disabled=!onNote;refreshNotes();
       let scaled=false;root.traverse(o=>{if(o.userData.atelierModel===1&&o.userData.measurementUnits==='mm')scaled=true;});
       // glTF 2 defines metres for geometry; no proprietary marker is required.
       $(dialog,'[data-measure]').disabled=false;

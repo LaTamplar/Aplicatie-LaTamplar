@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.25.8">
+<link rel="stylesheet" href="./models/viewer.css?v=1.25.9">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.25.8';
+      const APP_VERSION = '1.25.9';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6987,9 +6987,22 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.25.8');
+          const viewer = await import('./models/viewer.js?v=1.25.9');
           const projectId = activeProjectId;
-          viewer.openModels({ models: projectModels, onChange: async (models) => {
+          viewer.openModels({ models: projectModels,
+            getNotes: async modelId => {
+              const manager = window.atelierNotes?.manager;
+              if (!manager) return [];
+              await manager.ready;
+              return (await manager.store.all()).filter(note => note.projectId === projectId && note.modelId === modelId);
+            },
+            onNote: async options => {
+              if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat.');
+              const manager = window.atelierNotes?.manager;
+              if (!manager) throw new Error('Editorul de notițe nu este disponibil încă.');
+              await manager.openModelNote({ ...options, project: { id: projectId, name: currentProjectName } });
+              projectManagerNeedsRefresh = true;
+            }, onChange: async (models) => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
             const previous = projectModels;
             projectModels = normalizeProjectModels(models);
@@ -7410,19 +7423,23 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const notesCount = Number.isFinite(Number(record?.stats?.notes))
             ? Number(record.stats.notes)
             : countProjectNotes(Array.isArray(record?.payload?.images) ? record.payload.images : []);
-          const imageStat = document.createElement('div');
-          imageStat.className = 'project-stat';
-          imageStat.textContent = `${imagesCount} ${imagesCount === 1 ? 'imagine' : 'imagini'}`;
-          const noteStat = document.createElement('div');
-          noteStat.className = 'project-stat';
-          noteStat.textContent = `${notesCount} ${notesCount === 1 ? 'notă' : 'note'}`;
-          stats.appendChild(imageStat);
-          stats.appendChild(noteStat);
-          const modelStat = document.createElement('div');
-          modelStat.className = 'project-stat';
+          const totalNotesCount = notesCount + linkedNotes.length;
           const modelsCount = Array.isArray(record?.payload?.models) ? record.payload.models.length : Number(record?.stats?.models || 0);
-          modelStat.textContent = `${modelsCount} ${modelsCount === 1 ? 'model 3D' : 'modele 3D'}`;
-          stats.appendChild(modelStat);
+          const statItems = [
+            [imagesCount, imagesCount === 1 ? 'imagine' : 'imagini', 'M3 3h18v18H3z M3 16l6-6 4 4 3-3 5 5 M15 7h.01'],
+            [totalNotesCount, totalNotesCount === 1 ? 'notă' : 'note', 'M6 3h9l4 4v14H6z M15 3v5h4 M9 12h7 M9 16h5'],
+            [modelsCount, modelsCount === 1 ? 'model 3D' : 'modele 3D', 'm12 3 9 5v8l-9 5-9-5V8z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5']
+          ];
+          for (const [count, label, path] of statItems) {
+            const stat = document.createElement('div'); stat.className = 'project-stat';
+            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true');
+            const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path'); shape.setAttribute('d', path); icon.append(shape);
+            const copy = document.createElement('span'); copy.className = 'project-stat-copy';
+            const value = document.createElement('strong'); value.textContent = count;
+            const caption = document.createElement('span'); caption.textContent = label;
+            copy.append(value, document.createTextNode(' '), caption); stat.append(icon, copy); stats.append(stat);
+          }
 
           body.appendChild(top);
           body.appendChild(stats);
@@ -12279,7 +12296,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.25.8"></script>
+<script src="notes/notes-editor.js?v=1.25.9"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.5">
 <script src="inventory/inventory.js?v=1.24.5"></script>
 
@@ -13386,7 +13403,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.25.8">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.25.9">
 </body>
 </html>
 

@@ -399,13 +399,14 @@
   }
 
   class NoteEditor {
-    constructor(manager,note) {
+    constructor(manager,note,options={}) {
+      this.onClose=options.onClose;
       this.manager=manager;this.note=copy(note);this.pageIndex=clamp(note.activePage||0,0,note.pages.length-1);this.selected=null;this.tool='select';this.drawKind='pencil';this.drawColor='#25384b';this.toolSettings=loadToolSettings();this.shapeKind='rect';this.textStyle=TextObject.create(0,0);this.textStyle.fontSize=this.toolSettings.textSize;this.past=[];this.future=[];this.images=new Map();this.pointers=new Map();this.zoom=1;this.saveChain=Promise.resolve();this.dirty=false;this.revision=0;this.suppressClickUntil=0;this.pagesCollapsed=false;this.focusMode=false;
       this.root=el('section','an-editor');this.root.setAttribute('aria-label','Editor de notițe A4');this.root.id='atelierNoteEditor';
       const header=el('header','an-editor-header');const titleBlock=el('div','an-document-name');this.title=el('strong','',this.note.title);this.saveStatus=el('span','an-save-status','Salvat pe acest dispozitiv');this.saveStatus.setAttribute('role','status');titleBlock.append(this.title,this.saveStatus);
       this.pagesToggle=button('Pagini',()=>this.togglePages(),'sidebar','an-pages-toggle');this.pagesToggle.setAttribute('aria-expanded','true');this.pagesToggle.setAttribute('aria-controls','an-note-pages');this.pagesToggle.title='Ascunde paginile';
       this.zoomLabel=el('output','an-footer-zoom-value','100%');this.zoomLabel.setAttribute('aria-label','Zoom pagină');const zoomControls=el('div','an-footer-zoom');zoomControls.setAttribute('role','group');zoomControls.setAttribute('aria-label','Zoom pagină');zoomControls.append(button('Micșorează pagina',()=>this.zoomCentered(this.zoom/1.2),'minus','an-icon'),this.zoomLabel,button('Mărește pagina',()=>this.zoomCentered(this.zoom*1.2),'plus','an-icon'),button('Încadrează pagina',()=>this.fit(),'fitPage','an-fit-page'));
-      header.append(button('Notițe',()=>this.close(),'back'),titleBlock,this.pagesToggle,button('Detalii',()=>manager.details(this.note,updated=>{this.edit(()=>Object.assign(this.note,updated));this.title.textContent=this.note.title;}),'edit'),button('Exportă',()=>this.exportMenu(),'export'));
+      header.append(button(options.backLabel||'Notițe',()=>this.close(),'back'),titleBlock,this.pagesToggle,button('Detalii',()=>manager.details(this.note,updated=>{this.edit(()=>Object.assign(this.note,updated));this.title.textContent=this.note.title;}),'edit'),button('Exportă',()=>this.exportMenu(),'export'));
       this.sheet=el('div','an-sheet');this.canvas=el('canvas','an-canvas');this.canvas.setAttribute('aria-label','Pagina A4. Alege un instrument pentru a edita.');this.liveCanvas=el('canvas','an-live-canvas');this.liveCanvas.setAttribute('aria-hidden','true');this.sheet.append(this.canvas,this.liveCanvas);this.canvas.tabIndex=0;this.canvas.draggable=false;
       this.board=el('div','an-board');this.space=el('div','an-sheet-space');this.space.append(this.sheet);this.board.append(this.space);
       this.pages=new PageManager(this);this.selection=new SelectionLayer(this);this.toolbar=new Toolbar(this);this.toolbar.top.prepend(this.pagesToggle);
@@ -464,7 +465,7 @@
       this.saving=this.manager.store.put(data).then(()=>{if(revision===this.revision){this.dirty=false;this.status('Salvat pe acest dispozitiv');}}).catch(error=>{this.status('Salvarea a eșuat. Păstrează editorul deschis și exportă o copie editabilă.',true);throw error;});
       try{await this.saving;}finally{this.saving=null;}
     }
-    async close(){this.cancelCrop();this.endText();this.clearLiveStroke();clearTimeout(this.pagesTimer);try{await this.flush();}catch{return;}this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;this.manager.editor=null;await this.manager.render();document.getElementById('workspaceAddNote').focus();}
+    async close(){this.cancelCrop();this.endText();this.clearLiveStroke();clearTimeout(this.pagesTimer);try{await this.flush();}catch{return;}this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;this.manager.editor=null;await this.manager.render();if(this.onClose)await this.onClose();else document.getElementById('workspaceAddNote').focus();}
     undo(){this.cancelCrop();this.endText();if(!this.past.length)return;this.future.push(copy(this.note));this.note=this.past.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     redo(){this.cancelCrop();this.endText();if(!this.future.length)return;this.past.push(copy(this.note));this.note=this.future.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     setTool(tool){this.cancelCrop();this.endText();this.tool=tool==='marker'?'pencil':tool;this.drawKind=this.tool==='pencil'?'pencil':this.drawKind;this.selected=null;this.refresh(false);}
@@ -718,6 +719,19 @@
       d.querySelector('.an-dialog-actions').firstChild.remove();
     }
 
+    async openModelNote({project,model,snapshot,noteId,onClose}){
+      await this.ready;if(this.editor)throw Error('Închide mai întâi notița deschisă.');
+      let note=noteId?await this.store.get('notes',noteId):null;
+      if(noteId&&(!note||note.projectId!==project.id||note.modelId!==model.id))throw Error('Notița nu mai este disponibilă pentru acest model.');
+      if(!note){
+        const stamp=now(),page=pageData('landscape','blank'),scale=Math.min(1051/snapshot.width,480/snapshot.height),width=snapshot.width*scale,height=snapshot.height*scale;
+        const heading=TextObject.create(36,24,'Modificări — '+model.name,1051);heading.fontSize=24;heading.bold=true;TextObject.fit(heading);
+        page.objects.push(heading,{id:uid(),type:'image',x:(1123-width)/2,y:86,w:width,h:height,rotation:0,opacity:1,locked:true,src:snapshot.src,crop:{x:0,y:0,w:1,h:1}});
+        note={id:uid(),schema:1,title:('Modificări — '+model.name).slice(0,160),description:'',projectId:project.id,projectName:project.name,modelId:model.id,modelName:model.name,createdAt:stamp,updatedAt:stamp,pages:[page]};
+        await this.store.put(note);
+      }
+      this.editor=new NoteEditor(this,note,{backLabel:'Model 3D',onClose});this.editor.setTool('pencil');
+    }
     async newForProject(project){if(!project?.id)return;await this.ready;const linkedProject={id:project.id,name:project.name||'Proiect fără nume'};await this.details(null,async note=>{await this.store.put(note);await this.render();this.open(note);},linkedProject);}
     async openById(noteId){if(!noteId)return false;await this.ready;const note=await this.store.get('notes',noteId);if(!note)return false;this.show(true);this.open(note);return true;}
     pageTemplates(headingText='Prima foaie'){const node=el('section','an-template-picker'),heading=el('span','an-template-heading',headingText),choices=el('div','an-template-choices');let value={orientation:'portrait',paper:'blank'};const templates=[['portrait','blank','A4 vertical','Albă'],['portrait','grid','A4 vertical','Cu pătrățele'],['portrait','ruled','A4 vertical','Cu linii'],['landscape','blank','A4 orizontal','Albă'],['landscape','grid','A4 orizontal','Cu pătrățele'],['landscape','ruled','A4 orizontal','Cu linii']];for(const [orientation,paper,format,label] of templates){const item=button(`${format} · ${label}`,()=>{value={orientation,paper};for(const choice of choices.children)choice.setAttribute('aria-pressed','false');item.setAttribute('aria-pressed','true');},paper==='grid'?'shape':paper==='ruled'?'text':'image','an-template-choice');item.dataset.orientation=orientation;item.dataset.paper=paper;item.setAttribute('aria-pressed',String(orientation==='portrait'&&paper==='blank'));const sheet=el('span',`an-template-sheet an-${orientation} an-${paper}`);const copy=el('span','an-template-copy');copy.append(el('strong','',format),el('small','',label));item.replaceChildren(sheet,copy);choices.append(item);}node.append(heading,choices);return {node,get value(){return value;}};}
