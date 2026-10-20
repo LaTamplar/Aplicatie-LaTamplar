@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.25.14">
+<link rel="stylesheet" href="./models/viewer.css?v=1.25.15">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4045,7 +4045,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           <button type="button" class="project-status-filter" data-project-status-filter="finalized" aria-pressed="false">Finalizat <span class="manager-filter-count" data-count="finalized">0</span></button>
           <button type="button" class="project-status-filter" data-project-status-filter="favorites" aria-pressed="false">Favorite <span class="manager-filter-count" data-count="favorites">0</span></button>
         </div>
-        <div class="manager-view-controls"><label class="manager-sort-label">Sortează după: <select id="projectSort" aria-label="Sortează proiectele"><option value="updated">Ultima modificare</option><option value="name">Nume</option><option value="created">Data creării</option></select></label><div class="manager-layout-switch" role="group" aria-label="Afișare proiecte"><button type="button" data-project-layout="grid" aria-label="Grilă" aria-pressed="true">▦</button><button type="button" data-project-layout="list" aria-label="Listă" aria-pressed="false">☷</button></div></div>
+        <div class="manager-view-controls"><label class="manager-sort-label"><span class="manager-sort-caption">Sortează după:</span> <select id="projectSort" aria-label="Sortează proiectele"><option value="updated">Ultima modificare</option><option value="name">Nume</option><option value="created">Data creării</option></select></label><div class="manager-layout-switch" role="group" aria-label="Afișare proiecte"><button type="button" data-project-layout="grid" aria-label="Grilă" aria-pressed="true">▦</button><button type="button" data-project-layout="list" aria-label="Listă" aria-pressed="false">☷</button></div></div>
         <div class="project-manager-divider" aria-hidden="true"></div>
       </div>
       <div id="projectCards" class="project-grid" aria-live="polite"></div>
@@ -4056,7 +4056,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     </section>
 
     <section id="workspaceNotes" hidden aria-labelledby="workspaceNotesTitle">
-      <div class="workspace-notes-heading"><span class="manager-page-icon manager-page-icon-notes" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20V5.5A2 2 0 0 1 6 3.5Z"/><path d="M14 3.8v4h4M8 12h8M8 15.5h8"/></svg></span><div class="manager-heading-copy"><h2 id="workspaceNotesTitle" class="project-manager-page-title" tabindex="-1">Notițe</h2></div><label class="manager-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.5 4.5"/></svg><input id="workspaceNotesSearch" type="search" placeholder="Caută în notițe..." aria-label="Caută notițe"></label><div class="project-manager-actions project-section-actions workspace-notes-actions" aria-label="Acțiuni notițe"><button class="ui-action ui-action-primary" type="button" id="workspaceAddNote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Notiță nouă</span></button></div><div class="manager-notes-filters" role="group" aria-label="Filtrează notițele"><button type="button" data-notes-filter="all" aria-pressed="true">Toate <span class="manager-filter-count" data-notes-count="all">0</span></button><button type="button" data-notes-filter="favorites" aria-pressed="false">Favorite <span class="manager-filter-count" data-notes-count="favorites">0</span></button></div><div class="manager-view-controls"><label class="manager-sort-label">Sortează după: <select id="notesSort" aria-label="Sortează notițele"><option value="updated">Ultima modificare</option><option value="name">Nume</option><option value="created">Data creării</option></select></label><div class="manager-layout-switch" role="group" aria-label="Afișare notițe"><button type="button" data-notes-layout="grid" aria-label="Grilă" aria-pressed="true">▦</button><button type="button" data-notes-layout="list" aria-label="Listă" aria-pressed="false">☷</button></div></div></div>
+      <div class="workspace-notes-heading"><span class="manager-page-icon manager-page-icon-notes" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20V5.5A2 2 0 0 1 6 3.5Z"/><path d="M14 3.8v4h4M8 12h8M8 15.5h8"/></svg></span><div class="manager-heading-copy"><h2 id="workspaceNotesTitle" class="project-manager-page-title" tabindex="-1">Notițe</h2></div><label class="manager-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.5 4.5"/></svg><input id="workspaceNotesSearch" type="search" placeholder="Caută în notițe..." aria-label="Caută notițe"></label><div class="project-manager-actions project-section-actions workspace-notes-actions" aria-label="Acțiuni notițe"><button class="ui-action ui-action-primary" type="button" id="workspaceAddNote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Notiță nouă</span></button></div><div class="manager-notes-filters" role="group" aria-label="Filtrează notițele"><button type="button" data-notes-filter="all" aria-pressed="true">Toate <span class="manager-filter-count" data-notes-count="all">0</span></button><button type="button" data-notes-filter="favorites" aria-pressed="false">Favorite <span class="manager-filter-count" data-notes-count="favorites">0</span></button></div><div class="manager-view-controls"><label class="manager-sort-label"><span class="manager-sort-caption">Sortează după:</span> <select id="notesSort" aria-label="Sortează notițele"><option value="updated">Ultima modificare</option><option value="name">Nume</option><option value="created">Data creării</option></select></label><div class="manager-layout-switch" role="group" aria-label="Afișare notițe"><button type="button" data-notes-layout="grid" aria-label="Grilă" aria-pressed="true">▦</button><button type="button" data-notes-layout="list" aria-label="Listă" aria-pressed="false">☷</button></div></div></div>
       <p id="workspaceNotesStatus" role="status" aria-live="polite"></p>
       <div id="workspaceNotesList"></div>
     </section>
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.25.14';
+      const APP_VERSION = '1.25.15';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6988,7 +6988,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.25.14');
+          const viewer = await import('./models/viewer.js?v=1.25.15');
           const projectId = activeProjectId;
           const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -12320,7 +12320,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.25.14"></script>
+<script src="notes/notes-editor.js?v=1.25.15"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
 <script src="inventory/inventory.js?v=1.24.10"></script>
 
@@ -13427,7 +13427,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.25.14">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.25.15">
 </body>
 </html>
 
