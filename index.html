@@ -3392,7 +3392,7 @@ body:not(.fullscreen-mode) #editorView .image-thumb-title { padding: 3px 9px; bo
   #projectManagerView .project-card-name { overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>
-<link rel="stylesheet" href="notes/notes-editor.css?v=1.24.5">
+<link rel="stylesheet" href="notes/notes-editor.css?v=1.24.10">
 <style>
 /* Favorite affordances and tighter project card framing. */
 #projectManagerView .project-card {min-height:0;grid-template-rows:176px auto;}
@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.25.11">
+<link rel="stylesheet" href="./models/viewer.css?v=1.25.13">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.25.11';
+      const APP_VERSION = '1.25.13';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6975,7 +6975,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           model && typeof model.id === 'string' && typeof model.name === 'string' &&
           typeof model.dataUrl === 'string' && /^data:[^,]*;base64,/.test(model.dataUrl)
         ).map(model => ({ id: model.id, name: model.name, dataUrl: model.dataUrl,
-          size: Number(model.size) || 0, createdAt: model.createdAt || '' }));
+          size: Number(model.size) || 0, createdAt: model.createdAt || '',
+          stickyNotes: (Array.isArray(model.stickyNotes) ? model.stickyNotes : []).filter(note => note && typeof note.id === 'string' && note.modelSticky && Array.isArray(note.modelSticky.strokes)).map(note => ({id:note.id,title:String(note.title||'Bilețel'),createdAt:note.createdAt||'',updatedAt:note.updatedAt||'',modelSticky:note.modelSticky})) }));
       }
 
       function syncModelButton() {
@@ -6987,39 +6988,61 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.25.11');
+          const viewer = await import('./models/viewer.js?v=1.25.13');
           const projectId = activeProjectId;
-          viewer.openModels({ models: projectModels,
-            getNotes: async modelId => {
-              const manager = window.atelierNotes?.manager;
-              if (!manager) return [];
-              await manager.ready;
-              return (await manager.store.all()).filter(note => note.projectId === projectId && note.modelId === modelId);
-            },
-            onNote: async options => {
-              if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat.');
-              const manager = window.atelierNotes?.manager;
-              if (!manager) throw new Error('Editorul de notițe nu este disponibil încă.');
-              const note = await manager.saveModelSticky({ ...options, project: { id: projectId, name: currentProjectName } });
-              projectManagerNeedsRefresh = true;
-              return note;
-            }, onChange: async (models) => {
+          const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
             const previous = projectModels;
             projectModels = normalizeProjectModels(models);
             try {
               const payload = await buildProjectPayload();
-              const existing = await readProjectRecord(activeProjectId);
+              const existing = await readProjectRecord(projectId);
               if (!existing) throw new Error('Proiectul nu mai este disponibil.');
-              const record = buildProjectRecordFromPayload(payload, { id: activeProjectId,
+              const record = buildProjectRecordFromPayload(payload, { id: projectId,
                 name: currentProjectName, createdAt: existing.createdAt,
                 status: currentProjectStatus, favorite: existing.favorite });
               await saveProjectRecord(record);
-              projectManagerNeedsRefresh = true;
-              syncModelButton();
-              scheduleSave();
+              projectManagerNeedsRefresh = true; syncModelButton(); scheduleSave();
             } catch (error) { projectModels = previous; syncModelButton(); throw error; }
-          } });
+          };
+          // Copy existing model stickies into the project before retiring their library entries.
+          const manager = window.atelierNotes?.manager;
+          if (manager) {
+            await manager.ready;
+            const legacy = (await manager.store.all()).filter(note => note.projectId === projectId && note.modelSticky && projectModels.some(model => model.id === note.modelId && (note.legacyModelPages?.length || !(model.stickyNotes || []).some(existing => existing.id === note.id && (existing.updatedAt || '') >= (note.updatedAt || '')))));
+            if (legacy.length) {
+              const next = projectModels.map(model => {
+                const notes = new Map((model.stickyNotes || []).map(note => [note.id,note]));
+                for (const note of legacy.filter(note => note.modelId === model.id)) {
+                  const existing = notes.get(note.id);
+                  if (!existing || (note.updatedAt || '') > (existing.updatedAt || '')) notes.set(note.id,note);
+                }
+                return {...model,stickyNotes:[...notes.values()]};
+              });
+              await persistModels(next);
+              for (const note of legacy) if (note.legacyModelPages?.length) {
+                const restored = {...note,pages:note.legacyModelPages};
+                delete restored.modelSticky; delete restored.legacyModelPages;
+                await manager.store.put(restored);
+              }
+            }
+          }
+          viewer.openModels({ models: projectModels,
+            getNotes: async modelId => projectModels.find(model => model.id === modelId)?.stickyNotes || [],
+            onNote: async ({model,noteId,sticky}) => {
+              if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat.');
+              const current = projectModels.find(item => item.id === model.id);
+              if (!current) throw new Error('Modelul nu mai este disponibil.');
+              const previous = (current.stickyNotes || []).find(note => note.id === noteId);
+              if (noteId && !previous) throw new Error('Bilețelul nu mai este disponibil.');
+              const stamp = new Date().toISOString();
+              const note = {id:previous?.id || crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,title:previous?.title || 'Bilețel — '+model.name,
+                createdAt:previous?.createdAt || stamp,updatedAt:stamp,modelSticky:structuredClone(sticky)};
+              await persistModels(projectModels.map(item => item.id === model.id ? {...item,stickyNotes:[...(item.stickyNotes || []).filter(entry => entry.id !== note.id),note]} : item));
+              return note;
+            },
+            onChange: async models => persistModels(models.map(model => ({...model,stickyNotes:projectModels.find(item => item.id === model.id)?.stickyNotes || model.stickyNotes || []})))
+          });
         } catch (error) { showSaveToast('Vizualizarea 3D nu s-a putut deschide: ' + error.message); }
         finally { button.disabled = false; }
       });
@@ -7192,7 +7215,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         if (token !== projectRenderToken) return;
         const notesByProject = new Map();
         a4Notes.forEach((note) => {
-          if (!note?.projectId) return;
+          if (!note?.projectId || note.modelSticky) return;
           const linked = notesByProject.get(note.projectId) || [];
           linked.push(note);
           notesByProject.set(note.projectId, linked);
@@ -9309,8 +9332,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         }
         if (!activeStroke || event.pointerId !== activeDrawingPointerId) return;
         event.preventDefault();
-        const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [event];
-        coalesced.forEach((pointerEvent) => {
+        const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+        (coalesced.length ? coalesced : [event]).forEach((pointerEvent) => {
           const nextPoint = pointFromEvent(pointerEvent);
           if (!nextPoint) return;
           if (pendingStrokePoints.length < MAX_PENDING_STROKE_POINTS) {
@@ -12297,9 +12320,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.25.11"></script>
-<link rel="stylesheet" href="inventory/inventory.css?v=1.24.5">
-<script src="inventory/inventory.js?v=1.24.5"></script>
+<script src="notes/notes-editor.js?v=1.25.13"></script>
+<link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
+<script src="inventory/inventory.js?v=1.24.10"></script>
 
 <style id="workspace-account-notes-layout-v1238">
   #workspaceNotes .workspace-notes-heading {
@@ -13404,7 +13427,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.25.11">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.25.13">
 </body>
 </html>
 

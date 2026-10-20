@@ -227,3 +227,27 @@
 #projectManagerView#projectManagerView .an-note-card .project-card-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 #projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr) auto!important}
 #projectManagerView#projectManagerView .an-note-card .an-card-actions{justify-self:end;justify-content:flex-end;margin-left:auto}
+
+/* Note actions follow the title/date block, at the lower right. */
+#projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr)!important}
+#projectManagerView#projectManagerView .an-note-card .an-card-actions{grid-column:1;grid-row:2;justify-self:end;align-self:end}
+/* Keep page commands fixed; only thumbnails scroll within the editor. */
+.an-editor .an-editor-body{min-width:0;min-height:0;overflow:hidden}
+.an-editor .an-pages{min-height:0;min-width:0;overflow:hidden!important;box-sizing:border-box}
+.an-editor .an-pages-list{min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+@media(min-width:601px){
+ .an-editor .an-editor-body{grid-template-columns:clamp(148px,12vw,164px) minmax(0,1fr)!important}
+ .an-editor.an-pages-collapsed .an-editor-body{grid-template-columns:minmax(0,1fr)!important}
+ .an-editor .an-pages{display:flex;flex-direction:column;gap:0;padding:10px 8px!important}
+ .an-editor.an-pages-collapsed .an-pages{display:none}
+ .an-editor .an-pages-head{flex:0 0 auto;margin:0 0 8px;min-width:0}
+ .an-editor .an-page-add{flex:0 0 auto;width:100%;min-height:44px;margin:0 0 10px;padding:7px 4px;gap:4px;box-sizing:border-box;white-space:normal;font-size:11px;line-height:1.2}
+ .an-editor .an-page-add svg{width:16px;height:16px;flex:0 0 16px}
+ .an-editor .an-page-add span{min-width:0}
+ .an-editor .an-pages-list{flex:1 1 0;padding:2px 4px 8px 2px;scrollbar-gutter:stable}
+ .an-editor .an-page-item{min-width:0;width:100%;box-sizing:border-box}
+}
+@media(max-width:600px){
+ .an-editor .an-pages-list{display:flex;gap:8px;flex:1 1 0}
+ .an-editor .an-pages-list .an-page-item{flex:0 0 76px;margin:0}
+}
