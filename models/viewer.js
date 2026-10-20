@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { openSticky } from './sticky.js?v=1.26.2';
+import { openSticky } from './sticky.js?v=1.26.4';
 import { OrbitControls } from './vendor/OrbitControls.js?v=1.26.3';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.25.6';
@@ -35,7 +35,7 @@ export function openModels({models,onChange,getNotes,onNote}){
   <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".skp,.glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
-  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
+  let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,contextLost=false,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
   let selectedPart=null;const hiddenParts=[];let conversion=null,sticky=null;const lifecycle=new AbortController();
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let snapPoint=createSnapper();
@@ -70,7 +70,7 @@ export function openModels({models,onChange,getNotes,onNote}){
   }
   function message(text){status.textContent=text;}
   function render(){
-    if(closed||!renderer||!camera)return;
+    if(closed||contextLost||!renderer||!camera)return;
     // Keep useful depth precision on close, nearly coplanar cabinet surfaces.
     const distance=camera.position.distanceTo(controls.target),near=Math.max(1e-10,Math.min(distance*.005,clipRadius*.01)),far=Math.max(10,clipRadius*8,distance+clipRadius*4);
     if(camera.near!==near||camera.far!==far){camera.near=near;camera.far=far;camera.updateProjectionMatrix();}
@@ -79,17 +79,21 @@ export function openModels({models,onChange,getNotes,onNote}){
     if(points.length===2){const p=points[0].clone().add(points[1]).multiplyScalar(.5).project(camera);label.style.left=`${(p.x*.5+.5)*canvasHost.clientWidth}px`;label.style.top=`${(-p.y*.5+.5)*canvasHost.clientHeight}px`;label.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;}
   }
   function resize(){if(!renderer)return;const w=canvasHost.clientWidth,h=canvasHost.clientHeight;if(!w||!h)return;renderer.setSize(w,h);const aspect=w/h,factor=Math.min(1,camera.aspect)/Math.min(1,aspect);camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target);camera.aspect=aspect;camera.updateProjectionMatrix();render();}
-  function init(){
-    if(renderer)return;
-    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1.1;
-    renderer.domElement.setAttribute('aria-label','Model 3D: trage pentru rotire, folosește două degete pentru zoom și deplasare');
-    renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();message('Vizualizarea 3D a fost întreruptă de dispozitiv. Închide și redeschide modelul.');});
-    canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
-    // Neutral studio illumination is generated locally once; no HDR download,
-    // material recolouring, shadow passes or continuous animation are needed.
+  function rebuildEnvironment(){if(environment)environment.dispose();
     const studio=new THREE.Scene(),room=new THREE.Mesh(new THREE.BoxGeometry(12,12,12),new THREE.MeshBasicMaterial({color:0xbfc3c8,side:THREE.BackSide}));studio.add(room);
     for(const [x,y,z,w,h,power] of [[0,5.8,0,7,7,3],[-5.8,2,0,5,7,2],[5.8,2,0,5,7,2],[0,1,5.8,7,6,1.6]]){const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:new THREE.Color().setScalar(power),side:THREE.DoubleSide}));panel.position.set(x,y,z);panel.lookAt(0,0,0);studio.add(panel);}
     const pmrem=new THREE.PMREMGenerator(renderer);environment=pmrem.fromScene(studio,.08,.1,30);scene.environment=environment.texture;scene.environmentIntensity=.85;pmrem.dispose();dispose(studio);
+  }
+  function init(){
+    if(renderer)return;
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.5:2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1.1;
+    renderer.domElement.setAttribute('aria-label','Model 3D: trage pentru rotire, folosește două degete pentru zoom și deplasare');
+    renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;if(controls)controls.enabled=false;message('Se reface vizualizarea 3D… Modelul rămâne deschis.');});
+    renderer.domElement.addEventListener('webglcontextrestored',()=>{if(closed)return;requestAnimationFrame(()=>{if(closed)return;contextLost=false;rebuildEnvironment();controls.enabled=true;render();message('Vizualizarea 3D a fost refăcută. Poți continua.');});});
+    canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
+    // Neutral studio illumination is generated locally once; no HDR download,
+    // material recolouring, shadow passes or continuous animation are needed.
+    rebuildEnvironment();
     scene.add(new THREE.HemisphereLight(0xffffff,0xc3c6ca,.45));const light=new THREE.DirectionalLight(0xffffff,1.35);light.position.set(4,8,5);scene.add(light);const fill=new THREE.DirectionalLight(0xffffff,.55);fill.position.set(-5,3,-4);scene.add(fill);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.minDistance=1e-7;controls.maxDistance=Infinity;controls.zoomToCursor=true;controls.addEventListener('change',render);
     // Anchor zoom depth to the visible surface under the pinch midpoint, while
@@ -242,6 +246,6 @@ export function openModels({models,onChange,getNotes,onNote}){
     busy=true;list();try{const next=items.filter(x=>x.id!==activeId);await onChange(next);if(closed)return;items=next;reset();activeId=null;$(dialog,'.model-empty').hidden=false;busy=false;if(items.length)await load(items[0]);else message('Modelul a fost eliminat din proiect.');}catch(error){message('Nu am putut salva modificarea: '+error.message);}finally{busy=false;if(!closed)list();}
   };
   const observer=new ResizeObserver(resize);observer.observe(canvasHost);
-  async function close(){if(closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}closed=true;lifecycle.abort();conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();}
+  async function close(){if(closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}closed=true;lifecycle.abort();conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();window.dispatchEvent(new CustomEvent('atelier-editor-idle'));}
   $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();if(sticky)sticky.close().catch(error=>message(error.message));else close();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&!closed)sticky?.flush().catch(error=>message(error.message));},{signal:lifecycle.signal});list();if(items.length)load(items[0]);
 }

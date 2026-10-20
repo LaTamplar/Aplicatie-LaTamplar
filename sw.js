@@ -1,16 +1,16 @@
-const CACHE_NAME = 'fisa-atelier-v341';
+const CACHE_NAME = 'fisa-atelier-v342';
 const APP_FILES = [
   './',
   './index.html',
-  './workspace-polish.css?v=1.26.3',
-  './sw.js?v=1.26.3',
+  './workspace-polish.css?v=1.26.4',
+  './sw.js?v=1.26.4',
   './notes/notes-editor.css?v=1.24.10',
-  './notes/notes-editor.js?v=1.26.3',
+  './notes/notes-editor.js?v=1.26.4',
   './inventory/inventory.css?v=1.24.10',
   './inventory/inventory.js?v=1.24.10',
-  './models/viewer.css?v=1.26.3',
-  './models/viewer.js?v=1.26.3',
-  './models/sticky.js?v=1.26.2',
+  './models/viewer.css?v=1.26.4',
+  './models/viewer.js?v=1.26.4',
+  './models/sticky.js?v=1.26.4',
   './models/geometry.js?v=1.25.6',
   './models/vendor/skp-worker.js?v=1.25.8',
   './models/vendor/three.module.js',
@@ -36,7 +36,6 @@ self.addEventListener('install', (event) => {
         if (response.ok) await cache.put(file, response);
       } catch {}
     }));
-    await self.skipWaiting();
   })());
 });
 

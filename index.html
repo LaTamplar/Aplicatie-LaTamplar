@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.26.3">
+<link rel="stylesheet" href="./models/viewer.css?v=1.26.4">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4780,7 +4780,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const MIN_ZOOM_LEVEL = 1;
       const MAX_ZOOM_LEVEL = 12;
       const DOUBLE_TAP_ZOOM_LEVEL = 4;
-      const AUTOSAVE_DEBOUNCE_MS = 2000;
+      const AUTOSAVE_DEBOUNCE_MS = 10000;
       const STROKE_SAMPLE_MIN_DISTANCE_PX = 0.8;
       const MAX_PENDING_STROKE_POINTS = 32;
       const FULLSCREEN_SWIPE_MIN_DISTANCE_PX = 72;
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.3';
+      const APP_VERSION = '1.26.4';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -5589,6 +5589,26 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         await flushPendingFirebaseDeletions();
         await flushPendingFirebaseRecords();
       }
+      let deferredAppReload = false, appReloading = false, deferredReloadTimer;
+      function hasOpenWorkspaceEditor() {
+        return Boolean(document.getElementById('atelierModels')?.open || document.getElementById('atelierNoteEditor') || !editorView.hidden);
+      }
+      async function reloadAppWhenIdle() {
+        deferredAppReload = true;
+        if (appReloading || hasOpenWorkspaceEditor() || document.hidden) return false;
+        if (isContinuousInteractionActive()) { clearTimeout(deferredReloadTimer); deferredReloadTimer=setTimeout(resumeDeferredReload,1000); return false; }
+        appReloading = true;
+        try {
+          if (projectDirty && activeProjectId) await flushAutosave({ force:true });
+          await window.atelierNotes?.flush();
+          if (hasOpenWorkspaceEditor() || isContinuousInteractionActive() || document.hidden) { appReloading=false; return false; }
+          deferredAppReload=false; window.location.reload(); return true;
+        } catch { appReloading=false; return false; }
+      }
+      const resumeDeferredReload=()=>{if(deferredAppReload)reloadAppWhenIdle();};
+      window.addEventListener('atelier-editor-idle',resumeDeferredReload);
+      document.addEventListener('visibilitychange',resumeDeferredReload);
+      for(const id of ['backToProjects','workspaceProjectsNav','workspaceNotesNav','workspaceInventoryNav'])document.getElementById(id)?.addEventListener('click',()=>requestAnimationFrame(resumeDeferredReload));
       function isNotesWorkspaceActive() {
         const notesWorkspace = document.getElementById('workspaceNotes');
         return Boolean(document.getElementById('atelierNoteEditor') || (notesWorkspace && !notesWorkspace.hidden));
@@ -5599,6 +5619,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           firebaseUser
           && !projectManagerView.hidden
           && !isNotesWorkspaceActive()
+          && !hasOpenWorkspaceEditor()
           && !projectDirty
           && document.visibilityState === 'visible'
           && Date.now() - firebaseManagerLastInteractionAt > 4500
@@ -5618,7 +5639,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const remoteUpdatedAt = documentData?.fields?.updatedAt?.stringValue || '';
           // Dacă listener-ul Safari a fost întrerupt, reîncărcăm doar lista, nu editorul.
           // Pornirea aplicației preia ultima stare locală și din Firebase, fără intervenția utilizatorului.
-          if (remoteUpdatedAt && remoteUpdatedAt !== firebaseLastRemoteUpdatedAt) window.location.reload();
+          if (remoteUpdatedAt && remoteUpdatedAt !== firebaseLastRemoteUpdatedAt && canAutoRefreshProjectManager()) reloadAppWhenIdle();
         } catch (error) {
           console.warn('Verificarea automată a proiectelor va reîncerca.', error);
         }
@@ -5659,7 +5680,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           // RTDB a primit o modificare de pe celălalt dispozitiv. În lista de proiecte,
           // reîncărcarea este sigură și garantează afișarea imediată a noii stări.
           if (canAutoRefreshProjectManager()) {
-            window.location.reload();
+            reloadAppWhenIdle();
             return;
           }
           firebaseRefreshFromCloud();
@@ -6816,7 +6837,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           || activeTouches.size
           || activePencilEditorStroke
           || floatingToolbarDragging
-          || Date.now() - lastPenDrawingActivityAt < 1800
+          || Date.now() - lastPenDrawingActivityAt < 10000
           || window.atelierNotes?.manager?.editor?.isBusy()
         );
       }
@@ -6988,7 +7009,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.26.3');
+          const viewer = await import('./models/viewer.js?v=1.26.4');
           const projectId = activeProjectId;
           const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -7170,6 +7191,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         projectManagerView.hidden = false;
         projectManagerView.setAttribute('aria-hidden', 'false');
         document.title = 'Proiectele mele | La-Tamplar';
+        requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('atelier-editor-idle')));
       }
 
       function showEditor() {
@@ -7844,7 +7866,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           console.warn('Proiectul rămâne nesalvat local; autosave-ul va reîncerca.', error);
           showSaveToast('Spațiul local este plin. Proiectul nu a fost șters; salvează un export de rezervă.');
           window.clearTimeout(saveTimer);
-          saveTimer = window.setTimeout(() => flushAutosave({ force: true }), 12000);
+          saveTimer = window.setTimeout(() => flushAutosave(), 12000);
         } finally {
           autosaveInProgress = false;
         }
@@ -12250,28 +12272,35 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         window.addEventListener('load', () => {
           navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`, { updateViaCache: 'none' }).then((registration) => {
             let refreshingAfterUpdate = false;
-            let pendingUpdateWorker = null;
+            let pendingUpdateWorker = null, activatingUpdate = false, updateIdleTimer;
 
             const activateUpdateSafely = async (worker) => {
               if (!worker || worker.state !== 'installed' || !navigator.serviceWorker.controller) return;
               pendingUpdateWorker = worker;
+              if (activatingUpdate || hasOpenWorkspaceEditor() || document.hidden) return;
+              if (isContinuousInteractionActive()) { clearTimeout(updateIdleTimer); updateIdleTimer=setTimeout(resumeUpdate,1000); return; }
+              activatingUpdate=true;
               // Actualizarea este automată, însă întâi salvăm proiectul și notița în lucru.
               if (projectDirty && activeProjectId) {
                 try {
                   await flushAutosave({ force: true });
                 } catch (error) {
                   console.warn('Actualizarea a fost amânată: proiectul curent nu a putut fi salvat.', error);
-                  return;
+                  activatingUpdate=false; return;
                 }
               }
-              try { await window.atelierNotes?.flush(); } catch { return; }
+              try { await window.atelierNotes?.flush(); } catch { activatingUpdate=false; return; }
+              activatingUpdate=false;
+              if (hasOpenWorkspaceEditor() || document.hidden) return;
+              if (isContinuousInteractionActive()) { clearTimeout(updateIdleTimer); updateIdleTimer=setTimeout(resumeUpdate,1000); return; }
               pendingUpdateWorker = null;
               worker.postMessage({ type: 'SKIP_WAITING' });
             };
 
-            window.addEventListener('atelier-notes-inactive', () => {
-              if (pendingUpdateWorker) activateUpdateSafely(pendingUpdateWorker);
-            });
+            const resumeUpdate=()=>{if(pendingUpdateWorker)activateUpdateSafely(pendingUpdateWorker);};
+            document.addEventListener('visibilitychange',resumeUpdate);
+            for(const type of ['atelier-notes-inactive','atelier-editor-idle'])window.addEventListener(type,resumeUpdate);
+            for(const id of ['backToProjects','workspaceProjectsNav','workspaceNotesNav','workspaceInventoryNav'])document.getElementById(id)?.addEventListener('click',()=>requestAnimationFrame(resumeUpdate));
 
             if (registration.waiting) {
               activateUpdateSafely(registration.waiting);
@@ -12290,8 +12319,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             navigator.serviceWorker.addEventListener('controllerchange', async () => {
               if (refreshingAfterUpdate) return;
               refreshingAfterUpdate = true;
-              try { await window.atelierNotes?.flush(); } catch { refreshingAfterUpdate = false; return; }
-              window.location.reload();
+              await reloadAppWhenIdle();
+              refreshingAfterUpdate = false;
             });
 
             const checkForAppUpdate = () => {
@@ -12320,7 +12349,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.26.3"></script>
+<script src="notes/notes-editor.js?v=1.26.4"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
 <script src="inventory/inventory.js?v=1.24.10"></script>
 
@@ -13427,7 +13456,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.26.3">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.26.4">
 </body>
 </html>
 

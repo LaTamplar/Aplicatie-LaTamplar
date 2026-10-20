@@ -6,6 +6,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const normalizeAngle = value => {let normalized=((Number(value)+180)%360+360)%360-180;if(Math.abs(normalized+180)<1e-9&&Number(value)>0)normalized=180;return normalized;};
   const now = () => new Date().toISOString();
+  const AUTOSAVE_IDLE_MS = 10000;
   const date = value => new Date(value).toLocaleString('ro-RO', {dateStyle:'short', timeStyle:'short'});
   const size = page => page.orientation === 'landscape' ? [1123, 794] : [794, 1123];
   const pageData = (orientation = 'portrait', paper = 'blank') => ({id:uid(), orientation, paper, objects:[]});
@@ -271,7 +272,7 @@
         const wrap=el('div','an-page-item'),name=String(p.title||'').trim()||`Pagina ${i+1}`;
         const card=button(name,()=>e.switchPage(i));card.classList.add('an-page-thumb');card.setAttribute('aria-current',String(i===e.pageIndex));
         const c=el('canvas');c.width=120;c.height=Math.round(120*size(p)[1]/size(p)[0]);card.prepend(c);
-        const rename=button('Redenumește pagina',()=>this.rename(i),'edit','an-icon an-page-rename'),meta=el('div','an-page-meta');
+        const rename=button('Opțiuni pagină: nume și poziție',()=>this.rename(i),'more','an-icon an-page-rename'),meta=el('div','an-page-meta');
         meta.append(card.lastElementChild,rename);wrap.append(card,meta);list.append(wrap);
         jobs.set(wrap,{card,canvas:c,page:p});if(this.observer)this.observer.observe(wrap);else this.queuePreview(jobs.get(wrap));
       });
@@ -283,8 +284,9 @@
       const e=this.e,page=e.note.pages[index];if(!page)return;
       const content=el('div','an-form-grid'),name=input(page.title||'');
       name.maxLength=60;name.placeholder=`Pagina ${index+1}`;name.setAttribute('aria-label','Denumirea paginii');
-      content.append(field('Denumirea paginii',name),el('p','an-hint','Lasă gol pentru denumirea automată.'));
-      dialog('Redenumește pagina',content,()=>e.edit(()=>{page.title=name.value.trim();}), 'Salvează');
+      const position=select(e.note.pages.map((item,i)=>[String(i),`${i+1}${i===0?' · Prima pagină':''}${item.title?' · '+item.title:''}`]),String(index));
+      content.append(field('Denumirea paginii',name),field('Poziție în notiță',position),el('p','an-hint','Alege poziția 1 pentru a pune pagina prima. Numele poate rămâne gol.'));
+      dialog('Opțiuni pagină',content,()=>{const activeId=e.page.id;e.edit(()=>{page.title=name.value.trim();const from=e.note.pages.findIndex(item=>item.id===page.id),to=Number(position.value);if(from!==to){const [moved]=e.note.pages.splice(from,1);e.note.pages.splice(to,0,moved);}e.pageIndex=e.note.pages.findIndex(item=>item.id===activeId);});}, 'Salvează');
       requestAnimationFrame(()=>{name.focus();name.select();});
     }
     add() {const e=this.e,template=e.manager.pageTemplates('Pagina nouă');dialog('Adaugă pagină A4',template.node,()=>{const {orientation,paper}=template.value;e.edit(()=>{e.note.pages.splice(e.pageIndex+1,0,pageData(orientation,paper));e.pageIndex++;});e.fit();},'Adaugă');}
@@ -472,9 +474,9 @@
     status(text,error=false){this.saveStatus.textContent=text;this.saveStatus.classList.toggle('an-error',error);}
     snapshot(){const snapshot={...this.note,pages:this.note.pages.map(page=>({...page,objects:page.objects.map(o=>o.type==='drawing'?{...o,points:o.points}:o.type==='image'?{...o,crop:{...o.crop}}:copy(o))}))};this.past.push(snapshot);if(this.past.length>30)this.past.shift();this.future=[];}
     edit(action){this.cancelCrop();this.endText();this.snapshot();action();this.selected=null;this.changed();this.refresh();}
-    changed(delay=420,paint=true){this.note.updatedAt=now();this.note.activePage=this.pageIndex;this.revision++;this.dirty=true;this.lastInputAt=performance.now();this.status('Modificări nesalvate');this.scheduleSave(Math.max(delay,1800));if(paint)this.requestPaint();}
-    isBusy(){return Boolean(this.gesture||this.textComposing||performance.now()-(this.lastInputAt||0)<1800);}
-    scheduleSave(delay=1800){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush({force:false}).catch(()=>{}),delay);}
+    changed(delay=420,paint=true){this.note.updatedAt=now();this.note.activePage=this.pageIndex;this.revision++;this.dirty=true;this.lastInputAt=performance.now();this.status('Modificări nesalvate');this.scheduleSave(Math.max(delay,AUTOSAVE_IDLE_MS));if(paint)this.requestPaint();}
+    isBusy(){return Boolean(this.gesture||this.textComposing||(this.lastInputAt&&performance.now()-this.lastInputAt<AUTOSAVE_IDLE_MS));}
+    scheduleSave(delay=AUTOSAVE_IDLE_MS){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush({force:false}).catch(()=>{}),delay);}
     schedulePagesRender(delay=2000){clearTimeout(this.pagesTimer);this.pagesTimer=setTimeout(()=>{this.pagesTimer=null;if(!this.root.isConnected)return;if(this.isBusy()){this.schedulePagesRender();return;}this.pages.updateCurrentThumbnail();},delay);}
     async flush({force=true}={}){
       clearTimeout(this.timer);
@@ -486,7 +488,7 @@
       this.saving=this.manager.store.put(data).then(()=>{if(revision===this.revision){this.dirty=false;this.status('Salvat pe acest dispozitiv');}}).catch(error=>{this.status('Salvarea a eșuat. Păstrează editorul deschis și exportă o copie editabilă.',true);throw error;});
       try{await this.saving;}finally{this.saving=null;}
     }
-    async close(){this.cancelCrop();this.endText();this.clearLiveStroke();clearTimeout(this.pagesTimer);try{await this.flush();}catch{return;}this.pages.destroy();this.images.clear();ImageObject.retain([]);this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;this.manager.editor=null;await this.manager.render();if(this.onClose)await this.onClose();else document.getElementById('workspaceAddNote').focus();}
+    async close(){this.cancelCrop();this.endText();this.clearLiveStroke();clearTimeout(this.pagesTimer);try{await this.flush();}catch{return;}this.pages.destroy();this.images.clear();ImageObject.retain([]);this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;this.manager.editor=null;window.dispatchEvent(new CustomEvent('atelier-editor-idle'));await this.manager.render();if(this.onClose)await this.onClose();else document.getElementById('workspaceAddNote').focus();}
     undo(){this.cancelCrop();this.endText();if(!this.past.length)return;this.future.push(copy(this.note));this.note=this.past.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     redo(){this.cancelCrop();this.endText();if(!this.future.length)return;this.past.push(copy(this.note));this.note=this.future.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     setTool(tool){this.cancelCrop();this.endText();this.tool=tool==='marker'?'pencil':tool;this.drawKind=this.tool==='pencil'?'pencil':this.drawKind;this.selected=null;this.refresh(false);}
@@ -544,7 +546,7 @@
       if(this.resizePending)requestAnimationFrame(()=>this.preserveDocumentPositionOnResize());
       this.selection.hideRotation();
       if(cancel){if(g.before&&g.o)Object.assign(g.o,g.before);this.preview=null;this.clearLiveStroke();this.requestPaint();this.selection.render();if(this.dirty)this.scheduleSave();this.schedulePagesRender();return;}
-      if(g.kind==='draw'&&this.preview){event.preventDefault();this.suppressClickUntil=performance.now()+450;this.snapshot();this.page.objects.push(DrawingLayer.normalize(this.preview));const committed=this.page.objects.at(-1);this.preview=null;this.clearLiveStroke();const ctx=this.canvas.getContext('2d');ctx.setTransform(2,0,0,2,0,0);A4Canvas.object(ctx,committed,this.images);this.changed(1800,false);this.schedulePagesRender();this.toolbar.node.querySelectorAll('.an-history').forEach(group=>{const buttons=group.querySelectorAll('button');if(buttons[0])buttons[0].disabled=!this.past.length;if(buttons[1])buttons[1].disabled=!this.future.length;});return;}
+      if(g.kind==='draw'&&this.preview){event.preventDefault();this.suppressClickUntil=performance.now()+450;this.snapshot();this.page.objects.push(DrawingLayer.normalize(this.preview));const committed=this.page.objects.at(-1);this.preview=null;this.clearLiveStroke();const ctx=this.canvas.getContext('2d');ctx.setTransform(2,0,0,2,0,0);A4Canvas.object(ctx,committed,this.images);this.changed(AUTOSAVE_IDLE_MS,false);this.schedulePagesRender();this.toolbar.node.querySelectorAll('.an-history').forEach(group=>{const buttons=group.querySelectorAll('button');if(buttons[0])buttons[0].disabled=!this.past.length;if(buttons[1])buttons[1].disabled=!this.future.length;});return;}
       else if(g.kind==='text'){this.snapshot();const bounds=this.textBounds(g.start,g.moved?g.end:null),o=Object.assign(TextObject.create(bounds.x,bounds.y),copy(this.textStyle),bounds,{id:uid(),text:'',runs:[]});TextObject.fit(o);this.page.objects.push(o);this.selected=o.id;this.tool='select';this.changed();this.editText(o,false);}
 
       else if(g.kind==='shape'&&this.preview){this.snapshot();const o={...this.preview,id:uid(),w:Math.max(30,this.preview.w),h:Math.max(30,this.preview.h),opacity:1};this.preview=null;this.page.objects.push(o);this.selected=o.id;this.changed();this.pages.render();}
@@ -698,7 +700,7 @@
     }
     cloud(){return window.atelierNotesCloud;}
     connected(){return Boolean(this.cloud()?.connected?.());}
-    syncSoon(delay=650){clearTimeout(this.syncTimer);const idleDelay=this.editor?.root?.isConnected?Math.max(delay,3200):delay;this.syncTimer=setTimeout(()=>this.sync().catch(()=>{}),idleDelay);}
+    syncSoon(delay=650){clearTimeout(this.syncTimer);const idleDelay=this.editor?.root?.isConnected?Math.max(delay,AUTOSAVE_IDLE_MS):delay;this.syncTimer=setTimeout(()=>this.sync().catch(()=>{}),idleDelay);}
     async sync(){
       if(this.editor?.isBusy()){this.syncSoon(3200);return false;}if(this.syncing||!this.store.db||!this.connected())return false;this.syncing=true;if(!this.editor)this.status.textContent='Notițele se sincronizează…';
       try{
