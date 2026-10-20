@@ -310,3 +310,17 @@
  #projectManagerView#projectManagerView #workspaceInventory .inventory-dimension-filters{grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr)!important}
  #projectManagerView#projectManagerView #workspaceInventory .inventory-filter-mode{grid-column:1/-1!important}
 }
+/* A field has one rounded focus surface; never a second rectangle on its input. */
+#projectManagerView#projectManagerView .manager-search{align-items:center!important;min-width:0!important}
+#projectManagerView#projectManagerView .manager-search input,
+#projectManagerView#projectManagerView .manager-search input:is(:focus,:focus-visible){
+ display:block!important;flex:1 1 0%!important;width:0!important;min-width:0!important;max-width:100%!important;margin:0!important;
+ height:42px!important;min-height:0!important;padding:0!important;border:0!important;border-radius:0!important;
+ outline:none!important;outline-offset:0!important;box-shadow:none!important;background:transparent!important;line-height:normal!important
+}
+#projectManagerView#projectManagerView .manager-search input::placeholder{color:#7a8d9e;opacity:1;text-overflow:ellipsis}
+#projectManagerView#projectManagerView .manager-search:focus-within{border-color:#87aaca!important;background:#fff!important;box-shadow:0 0 0 3px #315f9110!important}
+#projectManagerView#projectManagerView .manager-sort-label{border-radius:9px!important}
+#projectManagerView#projectManagerView .manager-sort-label select:is(:focus,:focus-visible){outline:none!important;outline-offset:0!important;box-shadow:none!important}
+#projectManagerView#projectManagerView .manager-sort-label:focus-within{background:#f5f9fc!important;box-shadow:inset 0 0 0 1px #87aaca,0 0 0 2px #315f910c!important}
+#projectManagerView#projectManagerView #workspaceInventory .inventory-filter-field :is(input,select):is(:focus,:focus-visible){outline:none!important;outline-offset:0!important;border-color:#87aaca!important;background:#fff!important;box-shadow:0 0 0 3px #315f9110!important}
