@@ -1329,8 +1329,8 @@ class OrbitControls extends Controls {
 
 		this._dollyStart.copy( this._dollyEnd );
 
-		const centerX = ( event.pageX + position.x ) * 0.5;
-		const centerY = ( event.pageY + position.y ) * 0.5;
+		const centerX = event.clientX + ( position.x - event.pageX ) * 0.5;
+		const centerY = event.clientY + ( position.y - event.pageY ) * 0.5;
 
 		this._updateZoomParameters( centerX, centerY );
 

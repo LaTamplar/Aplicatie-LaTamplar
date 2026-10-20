@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { openSticky } from './sticky.js?v=1.26.2';
-import { OrbitControls } from './vendor/OrbitControls.js';
+import { OrbitControls } from './vendor/OrbitControls.js?v=1.26.3';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.25.6';
 
@@ -72,7 +72,7 @@ export function openModels({models,onChange,getNotes,onNote}){
   function render(){
     if(closed||!renderer||!camera)return;
     // Keep useful depth precision on close, nearly coplanar cabinet surfaces.
-    const distance=camera.position.distanceTo(controls.target),near=Math.max(.00001,Math.min(distance*.005,clipRadius*.01)),far=Math.max(10,clipRadius*8,distance+clipRadius*4);
+    const distance=camera.position.distanceTo(controls.target),near=Math.max(1e-10,Math.min(distance*.005,clipRadius*.01)),far=Math.max(10,clipRadius*8,distance+clipRadius*4);
     if(camera.near!==near||camera.far!==far){camera.near=near;camera.far=far;camera.updateProjectionMatrix();}
     renderer.render(scene,camera);
     const label=$(dialog,'[data-distance]');
@@ -91,7 +91,15 @@ export function openModels({models,onChange,getNotes,onNote}){
     for(const [x,y,z,w,h,power] of [[0,5.8,0,7,7,3],[-5.8,2,0,5,7,2],[5.8,2,0,5,7,2],[0,1,5.8,7,6,1.6]]){const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:new THREE.Color().setScalar(power),side:THREE.DoubleSide}));panel.position.set(x,y,z);panel.lookAt(0,0,0);studio.add(panel);}
     const pmrem=new THREE.PMREMGenerator(renderer);environment=pmrem.fromScene(studio,.08,.1,30);scene.environment=environment.texture;scene.environmentIntensity=.85;pmrem.dispose();dispose(studio);
     scene.add(new THREE.HemisphereLight(0xffffff,0xc3c6ca,.45));const light=new THREE.DirectionalLight(0xffffff,1.35);light.position.set(4,8,5);scene.add(light);const fill=new THREE.DirectionalLight(0xffffff,.55);fill.position.set(-5,3,-4);scene.add(fill);
-    controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.addEventListener('change',render);
+    controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.screenSpacePanning=true;controls.minDistance=1e-7;controls.maxDistance=Infinity;controls.zoomToCursor=true;controls.addEventListener('change',render);
+    // Anchor zoom depth to the visible surface under the pinch midpoint, while
+    // preserving the camera direction. A room's center must not stop a close-up.
+    const zoomTouches=new Map();
+    function anchorZoom(x,y){if(!root||busy)return;const rect=renderer.domElement.getBoundingClientRect(),ndc=new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),caster=new THREE.Raycaster();caster.setFromCamera(ndc,camera);const hit=caster.intersectObject(root,true).find(h=>h.object.isMesh&&visible(h.object));if(!hit)return;const forward=camera.getWorldDirection(new THREE.Vector3()),depth=hit.point.clone().sub(camera.position).dot(forward);if(depth<=controls.minDistance)return;controls.target.copy(camera.position).addScaledVector(forward,depth);controls.update();}
+    renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;zoomTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(zoomTouches.size===2){const [a,b]=[...zoomTouches.values()];anchorZoom((a.x+b.x)/2,(a.y+b.y)/2);}},{capture:true});
+    renderer.domElement.addEventListener('pointermove',e=>{if(zoomTouches.has(e.pointerId))zoomTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});},{capture:true});
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])renderer.domElement.addEventListener(type,e=>zoomTouches.delete(e.pointerId),{capture:true});
+    renderer.domElement.addEventListener('wheel',e=>anchorZoom(e.clientX,e.clientY),{capture:true,passive:true});
     const pointers=new Set();let multiGesture=false;
     renderer.domElement.addEventListener('pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1){multiGesture=false;pointerStart=e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()}:null;}else{multiGesture=true;pointerStart=null;}});
     renderer.domElement.addEventListener('pointerup',e=>{pointers.delete(e.pointerId);const p=pointerStart;pointerStart=null;if(!multiGesture&&p&&p.id===e.pointerId&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&performance.now()-p.time<(e.pointerType==='pen'?1200:650))pick(e);if(!pointers.size)multiGesture=false;});
@@ -122,7 +130,7 @@ export function openModels({models,onChange,getNotes,onNote}){
     let distance=radius;
     for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const corner=new THREE.Vector3(x,y,z).sub(center),depth=corner.dot(direction);distance=Math.max(distance,depth+Math.abs(corner.dot(right))/tanH,depth+Math.abs(corner.dot(up))/tanV);}
     distance*=1.08;
-    camera.near=Math.max(radius/10000,.00001);camera.far=Math.max(distance*30,100);camera.updateProjectionMatrix();camera.position.copy(center).add(direction.multiplyScalar(distance));controls.target.copy(center);controls.minDistance=radius*.005;controls.maxDistance=distance*20;controls.update();render();
+    camera.near=Math.max(radius/10000,.00001);camera.far=Math.max(distance*30,100);camera.updateProjectionMatrix();camera.position.copy(center).add(direction.multiplyScalar(distance));controls.target.copy(center);controls.update();render();
   }
   function updateVisibilityButtons(){const disabled=!hiddenParts.length;$(dialog,'[data-unhide-last]').disabled=disabled;$(dialog,'[data-unhide-all]').disabled=disabled;}
   function applyVisibility(){if(!root)return;const hidden=new Set(hiddenParts);root.traverse(o=>{o.visible=!o.userData.sketchupHidden&&tags.get(o.userData.sketchupTag)!==false&&!hidden.has(o);});clearMeasurement();clearSelection();updateVisibilityButtons();render();}
@@ -163,7 +171,7 @@ export function openModels({models,onChange,getNotes,onNote}){
     camera.position.sub(controls.target).multiplyScalar(1.3/Math.min(1,camera.aspect)).add(controls.target);
     const distance=camera.position.distanceTo(controls.target);
     if(distance<.001||camera.up.lengthSq()<.5)return fit();
-    camera.near=Math.max(distance/10000,.00001);camera.far=Math.max(distance*100,100);camera.updateProjectionMatrix();controls.minDistance=distance*.001;controls.maxDistance=distance*30;controls.update();fit(true);
+    camera.near=Math.max(distance/10000,.00001);camera.far=Math.max(distance*100,100);camera.updateProjectionMatrix();controls.update();fit(true);
   }
   async function load(model){
     if(busy||closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}busy=true;const token=++generation;list();message('Se deschide modelul…');
