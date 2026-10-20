@@ -4010,7 +4010,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.26.4">
+<link rel="stylesheet" href="./models/viewer.css?v=1.26.5">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4172,14 +4172,14 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         <legend>Format</legend>
         <div class="export-options">
           <label class="export-option"><input type="radio" name="exportFormat" value="png" checked> PNG (calitate maximă)</label>
-          <label class="export-option"><input type="radio" name="exportFormat" value="jpeg"> JPEG (calitate 90%)</label>
+          <label class="export-option"><input type="radio" name="exportFormat" value="jpeg"> JPEG (calitate 100%)</label>
         </div>
       </fieldset>
       <fieldset class="export-section">
         <legend>Rezoluție</legend>
         <div class="export-options">
           <label class="export-option"><input type="radio" name="exportScale" value="1" checked> Originală</label>
-          <label class="export-option"><input type="radio" name="exportScale" value="2"> 2x (calitate mai mare)</label>
+          <label class="export-option"><input type="radio" name="exportScale" value="2"> 2× (mărire)</label>
         </div>
       </fieldset>
       <div class="export-dialog-actions">
@@ -4795,7 +4795,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.4';
+      const APP_VERSION = '1.26.5';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -6624,39 +6624,6 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         });
       }
 
-      async function optimizeImageForStorage(file) {
-        const maxDimension = 1920;
-        const maxOriginalBytes = 2 * 1024 * 1024;
-        if (!file || file.type === 'image/svg+xml' || file.size <= maxOriginalBytes) return file;
-
-        const objectUrl = URL.createObjectURL(file);
-        try {
-          const image = await new Promise((resolve, reject) => {
-            const element = new Image();
-            element.onload = () => resolve(element);
-            element.onerror = () => reject(new Error('Imaginea nu a putut fi pregătită pentru salvare.'));
-            element.src = objectUrl;
-          });
-          const sourceWidth = image.naturalWidth || image.width;
-          const sourceHeight = image.naturalHeight || image.height;
-          const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-          canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-          const context = canvas.getContext('2d');
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.84));
-          if (!blob) return file;
-          const baseName = (file.name || 'imagine').replace(/\.[^.]+$/, '');
-          return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
-        } catch (error) {
-          console.warn('Imaginea va fi salvată în formatul original.', error);
-          return file;
-        } finally {
-          URL.revokeObjectURL(objectUrl);
-        }
-      }
-
       function cloneProjectData(value) {
         if (Array.isArray(value)) {
           return value.map((item) => cloneProjectData(item));
@@ -7009,7 +6976,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.26.4');
+          const viewer = await import('./models/viewer.js?v=1.26.5');
           const projectId = activeProjectId;
           const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -8676,19 +8643,35 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         exportCanvas.width = exportWidth;
         exportCanvas.height = exportHeight;
         const exportContext = exportCanvas.getContext('2d');
-        exportContext.clearRect(0, 0, exportWidth, exportHeight);
+        if (!exportContext) throw new Error('Rezoluția nu poate fi exportată pe acest dispozitiv. Alege rezoluția Originală.');
+        exportContext.imageSmoothingEnabled = true;
+        exportContext.imageSmoothingQuality = 'high';
+        if (format === 'jpeg') { exportContext.fillStyle='#fff'; exportContext.fillRect(0,0,exportWidth,exportHeight); }
         exportContext.drawImage(photo, 0, 0, exportWidth, exportHeight);
 
         const currentCanvasWidth = canvas.clientWidth || sourceWidth;
         const widthScale = exportWidth / Math.max(1, currentCanvasWidth);
-        strokes.forEach((stroke) => drawStrokeOnContext(exportContext, stroke, exportWidth, exportHeight, widthScale));
+        if (strokes.some(stroke=>stroke.eraser)) {
+          // Erase only ink, never the photograph underneath. Short strips avoid
+          // allocating a second full-resolution bitmap on memory-limited tablets.
+          const ink=document.createElement('canvas');ink.width=exportWidth;ink.height=Math.min(512,exportHeight);
+          try {
+            const inkContext=ink.getContext('2d');
+            if(!inkContext)throw new Error('Rezoluția nu poate fi exportată pe acest dispozitiv. Alege rezoluția Originală.');
+            for(let top=0;top<exportHeight;top+=ink.height){
+              inkContext.clearRect(0,0,ink.width,ink.height);inkContext.save();inkContext.translate(0,-top);
+              strokes.forEach(stroke=>drawStrokeOnContext(inkContext,stroke,exportWidth,exportHeight,widthScale));
+              inkContext.restore();exportContext.drawImage(ink,0,top);
+            }
+          } finally { ink.width=ink.height=0; }
+        } else strokes.forEach(stroke=>drawStrokeOnContext(exportContext,stroke,exportWidth,exportHeight,widthScale));
         drawDimensionsOnContext(exportContext, { ...(projectImages[activeImageIndex] || {}), strokes }, exportWidth, exportHeight);
         drawExportMarkers(exportContext, exportWidth, exportHeight, exportScale);
 
         return {
           canvas: exportCanvas,
           mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
-          quality: format === 'jpeg' ? 0.9 : undefined,
+          quality: format === 'jpeg' ? 1 : undefined,
           extension: format === 'jpeg' ? 'jpg' : 'png'
         };
       }
@@ -8721,8 +8704,10 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const scaleValue = getSelectedExportOption('exportScale', '1');
         const exportData = buildExportCanvas(format, scaleValue);
         if (!exportData) return;
-        const exportBlob = await canvasToBlob(exportData.canvas, exportData.mimeType, exportData.quality);
-        if (!exportBlob) return;
+        let exportBlob;
+        try { exportBlob = await canvasToBlob(exportData.canvas, exportData.mimeType, exportData.quality); }
+        finally { exportData.canvas.width=exportData.canvas.height=0; }
+        if (!exportBlob) throw new Error('Imaginea nu a putut fi generată. Încearcă rezoluția Originală.');
 
         const imageLabel = getImageDisplayTitle(projectImages[activeImageIndex], activeImageIndex);
         const baseName = sanitizeFileName(`${normalizeProjectName(currentProjectName)}-${imageLabel}`);
@@ -11224,42 +11209,36 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         });
       }
 
-      function loadImage(file, { storedStrokes = [], storedNotes = [], shouldPersist = true } = {}) {
-        return new Promise(async (resolve) => {
-          if (!file || !file.type.startsWith('image/')) {
-            resolve();
-            return;
+      async function loadImage(file, { storedStrokes = [], storedNotes = [], shouldPersist = true } = {}) {
+        if (!file || !file.type.startsWith('image/')) return;
+        // Keep the imported file bytes: no resizing or lossy recompression.
+        const dataUrl = await blobToDataUrl(file);
+        const imageEntry = {
+          id: createNoteId(),
+          name: file.name || getProjectImageName(projectImages.length),
+          title: getNextAutoImageTitle(),
+          dataUrl,
+          type: file.type || 'image/png',
+          strokes: cloneProjectData(storedStrokes),
+          notes: cloneProjectData(storedNotes),
+          zoom: 1,
+          pan: { x: 0, y: 0 },
+          activeTool: 'draw',
+          selectedNoteId: null,
+          selectedNoteMode: 'text',
+          drawSettings: {
+            color: brushColor,
+            size: brushSize,
+            eraser: isErasing,
+            lastPenSize,
+            lineDashed,
+            lastEraserSize
           }
-          const storedFile = await optimizeImageForStorage(file);
-          const dataUrl = await blobToDataUrl(storedFile);
-          const imageEntry = {
-            id: createNoteId(),
-            name: file.name || getProjectImageName(projectImages.length),
-            title: getNextAutoImageTitle(),
-            dataUrl,
-            type: storedFile.type || file.type || 'image/png',
-            strokes: cloneProjectData(storedStrokes),
-            notes: cloneProjectData(storedNotes),
-            zoom: 1,
-            pan: { x: 0, y: 0 },
-            activeTool: 'draw',
-            selectedNoteId: null,
-            selectedNoteMode: 'text',
-            drawSettings: {
-              color: brushColor,
-              size: brushSize,
-              eraser: isErasing,
-              lastPenSize,
-              lineDashed,
-              lastEraserSize
-            }
-          };
-          projectImages.push(imageEntry);
-          sanitizeProjectImagesCollection();
-          activeImageIndex = projectImages.length - 1;
-          await activateImageAt(activeImageIndex, { persist: shouldPersist });
-          resolve();
-        });
+        };
+        projectImages.push(imageEntry);
+        sanitizeProjectImagesCollection();
+        activeImageIndex = projectImages.length - 1;
+        await activateImageAt(activeImageIndex, { persist: shouldPersist });
       }
 
       function isBlankSheet(image) {
@@ -11973,7 +11952,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const files = Array.from(event.target.files || []);
         if (!files.length) return;
         for (const file of files) {
-          await loadImage(file, { shouldPersist: true });
+          try { await loadImage(file, { shouldPersist: true }); }
+          catch(error) { showSaveToast('Imaginea nu a putut fi adăugată: '+error.message); }
         }
         imageInput.value = '';
       });
@@ -12021,8 +12001,10 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       });
       cancelExportImageButton.addEventListener('click', closeExportImageDialog);
       confirmExportImageButton.addEventListener('click', async () => {
-        closeExportImageDialog();
-        await exportCurrentImage();
+        confirmExportImageButton.disabled=true;
+        try { await exportCurrentImage(); closeExportImageDialog(); }
+        catch(error) { showSaveToast('Imaginea nu a putut fi exportată: '+error.message); }
+        finally { confirmExportImageButton.disabled=false; }
       });
       cancelExportProjectButton.addEventListener('click', closeExportProjectDialog);
       confirmExportProjectButton.addEventListener('click', async () => {
@@ -12349,7 +12331,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.26.4"></script>
+<script src="notes/notes-editor.js?v=1.26.5"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
 <script src="inventory/inventory.js?v=1.24.10"></script>
 
@@ -13456,7 +13438,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.26.4">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.26.5">
 </body>
 </html>
 
