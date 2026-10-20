@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { openSticky } from './sticky.js?v=1.25.10';
+import { openSticky } from './sticky.js?v=1.26.2';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.25.6';
@@ -31,12 +31,12 @@ export function openModels({models,onChange,getNotes,onNote}){
   dialog.setAttribute('aria-labelledby','modelTitle');
   dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2></div><div class="model-header-actions"><button type="button" data-note disabled>✎ Notează</button><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
   <div class="model-body"><aside class="model-side"><section><h3>În acest proiect</h3><div data-model-list></div></section><section data-note-section><h3>Notițe pe model</h3><div data-model-notes></div></section><section><h3>Tag-uri SketchUp</h3><p data-tag-help class="model-muted">Tag-urile apar după deschiderea unui model.</p><div data-tags></div></section><section class="model-part" aria-live="polite"><h3>Piesă și material</h3><p data-part>Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.</p><div data-dimensions hidden></div></section></aside>
-  <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><span data-result aria-live="polite"></span></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Alege un fișier SketchUp .skp sau un model .glb. Conversia SketchUp se face automat pe acest dispozitiv.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p></section></div>
+  <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><div class="model-visibility" role="group" aria-label="Piese ascunse"><button type="button" data-hide-part aria-label="Ascunde piesa selectată" disabled>Ascunde piesa</button><button type="button" data-unhide-last disabled>Arată ultima</button><button type="button" data-unhide-all disabled>Arată toate</button></div><span data-result aria-live="polite"></span></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Alege un fișier SketchUp .skp sau un model .glb. Conversia SketchUp se face automat pe acest dispozitiv.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p></section></div>
   <footer class="model-footer"><span>Copie pentru vizualizare · modelul original nu este editat</span><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".skp,.glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
   let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
-  let conversion=null,sticky=null;const lifecycle=new AbortController();
+  let selectedPart=null;const hiddenParts=[];let conversion=null,sticky=null;const lifecycle=new AbortController();
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let snapPoint=createSnapper();
   const mm=value=>new Intl.NumberFormat('ro-RO',{maximumFractionDigits:1}).format(value);
@@ -104,8 +104,8 @@ export function openModels({models,onChange,getNotes,onNote}){
     $(dialog,'[data-add]').disabled=busy;$(dialog,'[data-remove]').disabled=busy||!activeId;
   }
   function clearMeasurement(){points=[];if(markerGroup){scene.remove(markerGroup);dispose(markerGroup);markerGroup=null;}$(dialog,'[data-result]').textContent='';$(dialog,'[data-distance]').hidden=true;$(dialog,'[data-clear]').disabled=true;render();}
-  function clearSelection(){if(selection){scene.remove(selection);dispose(selection);selection=null;}$(dialog,'[data-dimensions]').hidden=true;$(dialog,'[data-part]').textContent='Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.';}
-  function reset(){clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-note]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
+  function clearSelection(){selectedPart=null;$(dialog,'[data-hide-part]').disabled=true;if(selection){scene.remove(selection);dispose(selection);selection=null;}$(dialog,'[data-dimensions]').hidden=true;$(dialog,'[data-part]').textContent='Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.';}
+  function reset(){hiddenParts.length=0;updateVisibilityButtons();clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-note]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
   function fit(focus=false){
     if(!root)return;root.updateMatrixWorld(true);const box=new THREE.Box3();
     root.traverse(o=>{if(o.isMesh&&visible(o)){o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
@@ -124,11 +124,16 @@ export function openModels({models,onChange,getNotes,onNote}){
     distance*=1.08;
     camera.near=Math.max(radius/10000,.00001);camera.far=Math.max(distance*30,100);camera.updateProjectionMatrix();camera.position.copy(center).add(direction.multiplyScalar(distance));controls.target.copy(center);controls.minDistance=radius*.005;controls.maxDistance=distance*20;controls.update();render();
   }
+  function updateVisibilityButtons(){const disabled=!hiddenParts.length;$(dialog,'[data-unhide-last]').disabled=disabled;$(dialog,'[data-unhide-all]').disabled=disabled;}
+  function applyVisibility(){if(!root)return;const hidden=new Set(hiddenParts);root.traverse(o=>{o.visible=!o.userData.sketchupHidden&&tags.get(o.userData.sketchupTag)!==false&&!hidden.has(o);});clearMeasurement();clearSelection();updateVisibilityButtons();render();}
+  $(dialog,'[data-hide-part]').onclick=()=>{if(!selectedPart||!root||busy)return;const part=selectedPart,name=part.userData.atelierSourceName||part.name||'Piesă';if(!hiddenParts.includes(part))hiddenParts.push(part);applyVisibility();message(`„${name}” a fost ascunsă temporar. Arată ultima sau Arată toate readuce piesele ascunse manual.`);};
+  $(dialog,'[data-unhide-last]').onclick=()=>{if(!hiddenParts.length||busy)return;hiddenParts.pop();applyVisibility();message('Ultima piesă ascunsă manual a fost readusă. Tag-urile dezactivate rămân ascunse.');};
+  $(dialog,'[data-unhide-all]').onclick=()=>{if(!hiddenParts.length||busy)return;hiddenParts.length=0;applyVisibility();message('Toate piesele ascunse manual au fost readuse. Tag-urile dezactivate rămân ascunse.');};
   function tagPanel(){
     const host=$(dialog,'[data-tags]');host.replaceChildren();const metadata=[];root.traverse(o=>{if(Array.isArray(o.userData.sketchupTags))metadata.push(...o.userData.sketchupTags);});
     if(!metadata.length){$(dialog,'[data-tag-help]').textContent='Exportul GLB nu include tag-urile originale. Pentru Uși, Sertare sau alte tag-uri, folosește copia Atelier pregătită din fișierul .skp.';return;}
     metadata.forEach(t=>tags.set(t.name,t.visible!==false));
-    function apply(){root.traverse(o=>{o.visible=!o.userData.sketchupHidden&&(tags.get(o.userData.sketchupTag)!==false);});clearMeasurement();clearSelection();render();}
+    function apply(){applyVisibility();}
     const counts=new Map();root.traverse(o=>{if(!o.isMesh)return;const assigned=new Set();for(let p=o;p;p=p.parent){const t=p.userData.sketchupTag;if(t)assigned.add(t);}for(const t of assigned)counts.set(t,(counts.get(t)||0)+1);});
     const used=[...tags].filter(([name])=>counts.has(name)),unused=[...tags].filter(([name])=>!counts.has(name));
     $(dialog,'[data-tag-help]').textContent=`${used.length} tag-uri cu suprafețe. Debifează un tag pentru a ascunde piesele atribuite în SketchUp.`;
@@ -180,7 +185,7 @@ export function openModels({models,onChange,getNotes,onNote}){
     const hit=ray.intersectObject(root,true).find(h=>h.object.isMesh&&visible(h.object));if(!hit&&!measure)return;
     if(hit){
       const mat=Array.isArray(hit.object.material)?hit.object.material[hit.face.materialIndex]:hit.object.material;
-      const part=partFor(hit.object,root),bounds=partBounds(part);clearSelection();
+      const part=partFor(hit.object,root),bounds=partBounds(part);clearSelection();selectedPart=part;$(dialog,'[data-hide-part]').disabled=false;
       $(dialog,'[data-part]').textContent=`${part.userData.atelierSourceName||part.name||'Piesă'} · ${mat?.name||'Material implicit'}`;
       if(bounds){
         let separate=false;root.traverse(o=>{if(o.isMesh){let ancestor=o;while(ancestor&&ancestor!==part)ancestor=ancestor.parent;if(!ancestor)separate=true;}});
