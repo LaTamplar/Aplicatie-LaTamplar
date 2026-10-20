@@ -223,14 +223,12 @@
 #projectManagerView#projectManagerView :is(.project-card,.an-note-card){border-radius:18px!important;border-color:#dce5ee!important;background:#fff!important;box-shadow:0 4px 18px #203e5c08!important}
 #projectManagerView#projectManagerView .an-note-project{display:inline-flex!important;width:fit-content!important;max-width:100%;align-self:flex-start}
 
-/* Note cards: two useful counts; actions always sit at the right edge. */
+/* Match the project card's metadata row: label left, favorite/menu right. */
 #projectManagerView#projectManagerView .an-note-card .project-card-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-#projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr) auto!important}
-#projectManagerView#projectManagerView .an-note-card .an-card-actions{justify-self:end;justify-content:flex-end;margin-left:auto}
-
-/* Note actions follow the title/date block, at the lower right. */
 #projectManagerView#projectManagerView .an-note-card .project-card-top{grid-template-columns:minmax(0,1fr)!important}
-#projectManagerView#projectManagerView .an-note-card .an-card-actions{grid-column:1;grid-row:2;justify-self:end;align-self:end}
+#projectManagerView#projectManagerView .an-note-card .an-card-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;min-height:40px}
+#projectManagerView#projectManagerView .an-note-card .an-card-meta .an-note-project{display:block!important;order:0;flex:0 1 auto;min-width:0;max-width:100%;margin:0;align-self:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box}
+#projectManagerView#projectManagerView .an-note-card .an-card-actions{width:auto!important;justify-content:flex-end;margin-left:auto;align-self:center;flex:0 0 auto}
 /* Keep page commands fixed; only thumbnails scroll within the editor. */
 .an-editor .an-editor-body{min-width:0;min-height:0;overflow:hidden}
 .an-editor .an-pages{min-height:0;min-width:0;overflow:hidden!important;box-sizing:border-box}
