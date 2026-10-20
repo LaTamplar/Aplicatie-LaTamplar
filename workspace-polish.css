@@ -320,7 +320,8 @@
 }
 #projectManagerView#projectManagerView .manager-search input::placeholder{color:#7a8d9e;opacity:1;text-overflow:ellipsis}
 #projectManagerView#projectManagerView .manager-search:focus-within{border-color:#87aaca!important;background:#fff!important;box-shadow:0 0 0 3px #315f9110!important}
-#projectManagerView#projectManagerView .manager-sort-label{border-radius:9px!important}
+#projectManagerView#projectManagerView .manager-sort-label{padding:0 2px!important;border:1px solid #d9e3ec!important;border-radius:10px!important;background:#f8fafc!important;box-shadow:none!important}
+#projectManagerView#projectManagerView .manager-sort-label select{height:42px!important;min-height:42px!important}
 #projectManagerView#projectManagerView .manager-sort-label select:is(:focus,:focus-visible){outline:none!important;outline-offset:0!important;box-shadow:none!important}
-#projectManagerView#projectManagerView .manager-sort-label:focus-within{background:#f5f9fc!important;box-shadow:inset 0 0 0 1px #87aaca,0 0 0 2px #315f910c!important}
+#projectManagerView#projectManagerView .manager-sort-label:focus-within{border-color:#87aaca!important;background:#fff!important;box-shadow:0 0 0 3px #315f9110!important}
 #projectManagerView#projectManagerView #workspaceInventory .inventory-filter-field :is(input,select):is(:focus,:focus-visible){outline:none!important;outline-offset:0!important;border-color:#87aaca!important;background:#fff!important;box-shadow:0 0 0 3px #315f9110!important}
