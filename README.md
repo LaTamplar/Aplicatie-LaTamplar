@@ -14,7 +14,7 @@ Modulele active sunt grupate în directoare cu căi stabile. Pachetele de versiu
 
 ## Publicare
 
-GitHub Pages este configurat pe **Deploy from a branch → main → / (root)**. Modificările trimise în `main` sunt publicate automat la https://latamplar.github.io/Atelier-Fisa/ prin fluxul standard `pages-build-deployment`.
+GitHub Pages este configurat pe **Deploy from a branch → main → / (root)**. Modificările trimise în `main` sunt publicate automat la https://latamplar.github.io/Aplicatie-LaTamplar/ prin fluxul standard `pages-build-deployment`.
 
 ## Modele 3D
 
