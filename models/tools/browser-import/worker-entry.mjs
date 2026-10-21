@@ -8,7 +8,7 @@ self.onmessage=({data})=>{
   const doc=JSON.parse(new TextDecoder().decode(raw.subarray(20,20+length)));
   let index=0;function annotate(n){const out=doc.nodes[index++];if(!out)throw Error('Structură incompatibilă.');out.extras={sketchupTag:n.layer||'Layer0',sketchupHidden:!!n.hidden};n.children.forEach(annotate);}annotate(scene.sceneHierarchy);
   if(index!==doc.nodes.length)throw Error('Ierarhia modelului nu este completă.');
-  doc.nodes[doc.scenes[0].nodes[0]].extras={...doc.nodes[doc.scenes[0].nodes[0]].extras,atelierModel:1,measurementUnits:'mm',sourceUnits:'inch',sketchupTags:Object.entries(scene.layerHidden).map(([name,hidden])=>({name,visible:!hidden}))};
+  doc.nodes[doc.scenes[0].nodes[0]].extras={...doc.nodes[doc.scenes[0].nodes[0]].extras,atelierModel:1,materialImportVersion:2,materialMode:'materials',measurementUnits:'mm',sourceUnits:'inch',sketchupTags:Object.entries(scene.layerHidden).map(([name,hidden])=>({name,visible:!hidden}))};
   const json=new TextEncoder().encode(JSON.stringify(doc)),padded=(json.length+3)&~3,rest=raw.subarray(20+length),out=new Uint8Array(20+padded+rest.length),header=new DataView(out.buffer);
   header.setUint32(0,0x46546c67,true);header.setUint32(4,2,true);header.setUint32(8,out.length,true);header.setUint32(12,padded,true);header.setUint32(16,0x4e4f534a,true);out.fill(32,20,20+padded);out.set(json,20);out.set(rest,20+padded);
   self.postMessage({buffer:out.buffer},[out.buffer]);

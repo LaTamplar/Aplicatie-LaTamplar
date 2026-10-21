@@ -1,8 +1,8 @@
 import * as THREE from './vendor/three.module.js';
 import { openSticky } from './sticky.js?v=1.26.4';
-import { OrbitControls } from './vendor/OrbitControls.js?v=1.26.3';
+import { OrbitControls } from './vendor/OrbitControls.js?v=1.26.7';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.25.6';
+import { createSnapper, partFor, partBounds, isVisible as visible } from './geometry.js?v=1.26.7';
 
 const MAX_BYTES=25*1024*1024, MAX_TOTAL=50*1024*1024;
 const $=(root,sel)=>root.querySelector(sel);
@@ -58,7 +58,7 @@ export function openModels({models,onChange,getNotes,onNote}){
   async function convertSketchUp(file){
     const buffer=await file.arrayBuffer();if(closed)throw Error('Conversie anulată.');
     return new Promise((resolve,reject)=>{
-      const worker=new Worker(new URL('./vendor/skp-worker.js?v=1.25.8',import.meta.url),{type:'module'});
+      const worker=new Worker(new URL('./vendor/skp-worker.js?v=1.26.7',import.meta.url),{type:'module'});
       let settled=false;
       function finish(error,value){if(settled)return;settled=true;clearTimeout(timer);worker.terminate();conversion=null;error?reject(error):resolve(value);}
       const timer=setTimeout(()=>finish(Error('Modelul este prea complex pentru conversia pe acest dispozitiv. Folosește o copie GLB pregătită pe PC.')),45000);
@@ -106,7 +106,7 @@ export function openModels({models,onChange,getNotes,onNote}){
     renderer.domElement.addEventListener('wheel',e=>anchorZoom(e.clientX,e.clientY),{capture:true,passive:true});
     const pointers=new Set();let multiGesture=false;
     renderer.domElement.addEventListener('pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1){multiGesture=false;pointerStart=e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId,time:performance.now()}:null;}else{multiGesture=true;pointerStart=null;}});
-    renderer.domElement.addEventListener('pointerup',e=>{pointers.delete(e.pointerId);const p=pointerStart;pointerStart=null;if(!multiGesture&&p&&p.id===e.pointerId&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&performance.now()-p.time<(e.pointerType==='pen'?1200:650))pick(e);if(!pointers.size)multiGesture=false;});
+    renderer.domElement.addEventListener('pointerup',e=>{pointers.delete(e.pointerId);const p=pointerStart;pointerStart=null;if(!multiGesture&&p&&p.id===e.pointerId&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&performance.now()-p.time<(e.pointerType==='pen'?1200:650))pick({clientX:p.x,clientY:p.y,pointerType:e.pointerType});if(!pointers.size)multiGesture=false;});
     renderer.domElement.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);pointerStart=null;if(!pointers.size)multiGesture=false;});resize();
   }
   function list(){

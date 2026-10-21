@@ -1,0 +1,24 @@
+/* One usable viewport for libraries, editors and top-layer dialogs. */
+:root{--app-safe-top:env(safe-area-inset-top,0px);--app-safe-right:env(safe-area-inset-right,0px);--app-safe-bottom:env(safe-area-inset-bottom,0px);--app-safe-left:env(safe-area-inset-left,0px);--app-safe-height:calc(100dvh - var(--app-safe-top) - var(--app-safe-bottom));--app-safe-width:calc(100vw - var(--app-safe-left) - var(--app-safe-right))}
+@media(pointer:coarse){:root.app-installed{--app-safe-top:max(26px,env(safe-area-inset-top,0px))}}
+body{padding:var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left)}
+#projectManagerView{min-height:var(--app-safe-height)}
+#projectManagerView .workspace-sidebar{top:calc(var(--app-safe-top) + 16px);min-height:calc(var(--app-safe-height) - 32px)}
+@media(pointer:coarse) and (min-width:601px){#projectManagerView{padding-top:16px}}
+#atelierNoteEditor.an-editor{inset:var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);height:auto;width:auto;padding:8px 0 0}
+body>dialog:not(.an-print-frame){inset:var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);max-width:calc(var(--app-safe-width) - 24px);max-height:calc(var(--app-safe-height) - 24px)}
+#atelierModels.atelier-models{width:min(1680px,calc(var(--app-safe-width) - 16px));height:calc(var(--app-safe-height) - 16px);max-width:none;max-height:none}
+@media(max-width:850px){#atelierModels.atelier-models{width:calc(var(--app-safe-width) - 12px);height:calc(var(--app-safe-height) - 12px)}}
+body>.save-dialog-backdrop,body>.pencil-editor-overlay,body>.fullscreen-overlay{inset:var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);padding:12px;max-height:var(--app-safe-height)}
+body>.save-dialog-backdrop>:first-child{max-height:calc(var(--app-safe-height) - 24px)}
+body>.inventory-image-dialog{width:var(--app-safe-width);height:var(--app-safe-height);max-width:none;max-height:none;margin:0}
+body.fullscreen-mode .fullscreen-close-btn{top:calc(var(--app-safe-top) + 10px);right:calc(var(--app-safe-right) + 10px)}
+body.fullscreen-mode .image-panel.fullscreen-panel .fullscreen-image-title{top:calc(var(--app-safe-top) + 8px);left:calc(var(--app-safe-left) + 14px)}
+body.fullscreen-mode .fullscreen-inline{top:calc(var(--app-safe-top) + 16px);left:calc(var(--app-safe-left) + 16px)}
+body.fullscreen-mode .fullscreen-image-nav-prev{left:calc(var(--app-safe-left) + 10px)}
+body.fullscreen-mode .fullscreen-image-nav-next{right:calc(var(--app-safe-right) + 10px)}
+.an-editor .an-toolbar .an-floating-panel{max-height:calc(var(--app-safe-height) - 16px)}
+
+body>.fullscreen-overlay{padding:0}
+body.fullscreen-mode .image-panel.fullscreen-panel{inset:0;width:var(--app-safe-width);height:var(--app-safe-height)}
+body.fullscreen-mode .image-panel.fullscreen-panel .canvas-shell{width:var(--app-safe-width);height:var(--app-safe-height);min-height:var(--app-safe-height)}

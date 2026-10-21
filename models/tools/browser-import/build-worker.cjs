@@ -27,4 +27,24 @@ const flagStart=source.indexOf('var EdgeFlagStore = class {');
 const flagEnd=source.indexOf('// src/vertex-store.ts',flagStart);
 if(flagStart<0||flagEnd<0)throw Error('Missing edge flag store');
 source=source.slice(0,flagStart)+'var EdgeFlagStore = class extends Map { set(id,flags){return super.set(id,flags & 255);} };\n\n'+source.slice(flagEnd);
+// Normal material mode must not substitute random tag palette colours for
+// unpainted faces. Cached style-library files may not be the active style;
+// use SketchUp's normal front/back defaults rather than those library entries.
+patch('const c = layerColors.get(name) || [136, 136, 136];', 'const c = [255, 255, 255];');
+patch('const backColor = backMat?.color ?? fallbackColor;', 'const backColor = backMat?.color ?? ctx.fallbackBackColor ?? fallbackColor;');
+for(const owner of ['parentLayer','layer'])patch('fallbackLayerColor: getLayerColor('+owner+'),', 'fallbackLayerColor: getLayerColor('+owner+'),\n      fallbackBackColor: (() => { const c = [164, 178, 187]; return {r:c[0],g:c[1],b:c[2]}; })(),');
+// Equal average RGB does not mean equal paint: the two sides can have entirely
+// different textures/material names/UV mapping and must remain distinct.
+patch('const sameColor = frontColor.r === backColor.r && frontColor.g === backColor.g && frontColor.b === backColor.b;', 'const sameColor = frontMat === backMat && frontColor.r === backColor.r && frontColor.g === backColor.g && frontColor.b === backColor.b && (frontColor.a ?? 255) === (backColor.a ?? 255) && (!frontMat?.texture || uvTransform === uvTransformBack || JSON.stringify(uvTransform) === JSON.stringify(uvTransformBack));');
+// PNG headers and total byte lengths can match for different textures. Hash
+// all bytes once per texture, keep different image payloads separate.
+source = `const atelierTextureHashes = new WeakMap();
+function atelierTextureFingerprint(tex) {
+ let key=atelierTextureHashes.get(tex);if(key)return key;
+ let a=2166136261,b=5381;for(const value of tex.data){a=Math.imul(a^value,16777619);b=Math.imul(b,33)^value;}
+ key=(a>>>0).toString(16)+':'+(b>>>0).toString(16);atelierTextureHashes.set(tex,key);return key;
+}
+`+source;
+patch('Array.from(tex.data.subarray(0, 16)).join(",")', 'atelierTextureFingerprint(tex)');
 fs.writeFileSync(path.join(dir,'openskp-adapted.mjs'),source);
+

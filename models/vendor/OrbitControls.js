@@ -723,7 +723,8 @@ class OrbitControls extends Controls {
 				newRadius = this._clampDistance( prevRadius * this._scale );
 
 				const radiusDelta = prevRadius - newRadius;
-				this.object.position.addScaledVector( this._dollyDirection, radiusDelta );
+				const rayDepth = prevRadius > 0 ? - this._dollyDirection.dot( _v ) / prevRadius : 1;
+				this.object.position.addScaledVector( this._dollyDirection, radiusDelta / Math.max( 1e-6, rayDepth ) );
 				this.object.updateMatrixWorld();
 
 				zoomChanged = !! radiusDelta;
@@ -1323,7 +1324,12 @@ class OrbitControls extends Controls {
 
 		this._dollyEnd.set( 0, distance );
 
-		this._dollyDelta.set( 0, Math.pow( this._dollyEnd.y / this._dollyStart.y, this.zoomSpeed ) );
+		const previousDistance = this._dollyStart.y;
+		if ( distance < 1 || previousDistance < 1 ) {
+			this._dollyStart.copy( this._dollyEnd );
+			return;
+		}
+		this._dollyDelta.set( 0, Math.pow( this._dollyEnd.y / previousDistance, this.zoomSpeed ) );
 
 		this._dollyOut( this._dollyDelta.y );
 

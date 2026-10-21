@@ -27,7 +27,8 @@ export function partBounds(part){
     const transform=inverse.clone().multiply(o.matrixWorld),position=o.geometry.attributes.position,index=o.geometry.index;
     // Transform actual vertices, not an already expanded world bounding box.
     const start=o.geometry.drawRange.start,end=Math.min(index?index.count:position.count,start+o.geometry.drawRange.count);
-    for(let i=start;i<end;i++)box.expandByPoint(v.fromBufferAttribute(position,index?index.getX(i):i).applyMatrix4(transform));
+    const seen=index?new Uint8Array(position.count):null;
+    for(let i=start;i<end;i++){const vertex=index?index.getX(i):i;if(seen?.[vertex])continue;if(seen)seen[vertex]=1;box.expandByPoint(v.fromBufferAttribute(position,vertex).applyMatrix4(transform));}
   });
   if(box.isEmpty())return null;
   const size=box.getSize(new THREE.Vector3()),e=part.matrixWorld.elements;
@@ -51,7 +52,7 @@ export function createSnapper(){
   }
   return function snapPoint({root,camera,rect,x,y,hit,scope=root,threshold=12}){
     const vertices=[],edges=[],a=new THREE.Vector3(),b=new THREE.Vector3(),pa=new THREE.Vector3(),pb=new THREE.Vector3();
-    const view=camera.matrixWorldInverse,visibilityRay=new THREE.Raycaster();
+    const view=camera.matrixWorldInverse,visibilityRay=new THREE.Raycaster(),vp=new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,view);
     function project(v,out){out.copy(v).project(camera);return out.z>=-1&&out.z<=1;}
     function distance(p){return Math.hypot((p.x*.5+.5)*rect.width-x,(-p.y*.5+.5)*rect.height-y);}
     scope.traverse(o=>{
@@ -69,7 +70,13 @@ export function createSnapper(){
         const av=project(a,pa),bv=project(b,pb);
         if(av){const d=distance(pa);if(d<=threshold)vertices.push({point:a.clone(),distance:d,kind:'colț'});}
         if(bv){const d=distance(pb);if(d<=threshold)vertices.push({point:b.clone(),distance:d,kind:'colț'});}
-        if(!av||!bv)continue;
+        // Clip the feature segment in homogeneous coordinates. At close zoom
+        // an endpoint may be behind the near plane while its edge is visible.
+        const ca=new THREE.Vector4(a.x,a.y,a.z,1).applyMatrix4(vp),cb=new THREE.Vector4(b.x,b.y,b.z,1).applyMatrix4(vp);
+        let first=0,last=1,rejected=false;
+        for(const axis of ['x','y','z'])for(const sign of [-1,1]){const fa=ca.w+sign*ca[axis],fb=cb.w+sign*cb[axis];if(fa<0&&fb<0){rejected=true;break;}if(fa<0)first=Math.max(first,fa/(fa-fb));else if(fb<0)last=Math.min(last,fa/(fa-fb));}
+        if(rejected||first>last)continue;
+        const original=a.clone(),end=b.clone();a.copy(original).lerp(end,first);b.copy(original).lerp(end,last);pa.copy(a).project(camera);pb.copy(b).project(camera);
         const ax=(pa.x*.5+.5)*rect.width,ay=(-pa.y*.5+.5)*rect.height,bx=(pb.x*.5+.5)*rect.width,by=(-pb.y*.5+.5)*rect.height;
         const dx=bx-ax,dy=by-ay,length=dx*dx+dy*dy;if(length<1e-8)continue;
         const s=THREE.MathUtils.clamp(((x-ax)*dx+(y-ay)*dy)/length,0,1),d=Math.hypot(ax+s*dx-x,ay+s*dy-y);

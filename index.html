@@ -11,12 +11,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Fișă atelier">
+  <script>
+    (()=>{const installed=matchMedia('(display-mode: standalone)');const update=()=>document.documentElement.classList.toggle('app-installed',installed.matches||navigator.standalone===true);update();installed.addEventListener?.('change',update);})();
+  </script>
   <link rel="manifest" href="manifest.webmanifest?v=1.23.0">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=1.23.0">
   <link rel="apple-touch-icon" href="icon-180.png?v=1.23.0">
   <title>Notițe pe imagini</title>
   <style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #29261f; background: #edeae4; --app-safe-top: env(safe-area-inset-top, 0px); --app-safe-right: env(safe-area-inset-right, 0px); --app-safe-bottom: env(safe-area-inset-bottom, 0px); --app-safe-left: env(safe-area-inset-left, 0px); }
+    @media(pointer:coarse){:root.app-installed{--app-safe-top:max(26px,env(safe-area-inset-top,0px))}}
     * { box-sizing: border-box; }
     body { min-width: 320px; margin: 0; padding: var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left); background: radial-gradient(circle at 0% 0%, #f8f5ee 0, transparent 38%), linear-gradient(135deg, #ebe8e1 0%, #f5f2ec 55%, #e9e4db 100%); }
     #projectManagerView[hidden], #editorView[hidden], .notes[hidden] { display: none !important; }
@@ -4010,7 +4014,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     #projectManagerView .workspace-sync-copy i[data-state="warning"] {background:#edbd55;}
     #projectManagerView .workspace-sync-chevron {width:14px;height:14px;flex:none;fill:none;stroke:#aab9c8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 </style>
-<link rel="stylesheet" href="./models/viewer.css?v=1.26.6">
+<link rel="stylesheet" href="./models/viewer.css?v=1.26.7">
 </head>
 <body>
   <div id="saveToast" class="save-toast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -4795,7 +4799,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.6';
+      const APP_VERSION = '1.26.7';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -5421,8 +5425,25 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         showSaveToast(`${records.length} proiecte, ${a4Notes.length} notițe și ${inventoryItems.length} materiale au fost trimise în sincronizare.`);
       }
 
+      let firebaseReconcileIdleTimer;
+      function deferFirebaseReconcile(remote){
+        firebasePendingRemote=remote;clearTimeout(firebaseReconcileIdleTimer);
+        firebaseReconcileIdleTimer=setTimeout(()=>{if(firebaseRunning)return;const pending=firebasePendingRemote;firebasePendingRemote=null;if(pending)firebaseReconcile(pending).catch(()=>{});},10000);
+      }
+      function firebaseProjectProtected(id){return id===activeProjectId&&(projectDirty||hasOpenWorkspaceEditor()||isContinuousInteractionActive());}
+      async function applyFirebaseRemote({record,id=record?.id,deletedAt}){
+        const database=await openDatabase();try{
+          const tx=database.transaction([projectStore,metaStore],'readwrite'),done=transactionAsPromise(tx),records=tx.objectStore(projectStore),meta=tx.objectStore(metaStore);
+          const [local,queued,deleted]=await Promise.all([requestAsPromise(records.get(id)),requestAsPromise(meta.get(firebasePendingRecordsMetaKey)),requestAsPromise(meta.get(firebasePendingDeletesMetaKey))]);
+          let applied=false;if(!queued?.value?.[id]&&!deleted?.value?.[id]&&!firebaseProjectProtected(id)){
+            if(record&&(!local||getRecordUpdatedAt(record)>getRecordUpdatedAt(local))){records.put(record);applied=true;}
+            else if(deletedAt&&local&&Date.parse(deletedAt)>=getRecordUpdatedAt(local)){records.delete(id);applied=true;}
+          }await done;return applied;
+        }finally{database.close();}
+      }
       async function firebaseReconcile(remote) {
         if (!firebaseUser || !remote) return;
+        if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
         if (firebaseRunning) {
           firebasePendingRemote = remote;
           return;
@@ -5436,15 +5457,17 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const protectedOfflineIds = await getPendingFirebaseRecordIds();
           const protectedDeletionIds = await getPendingFirebaseDeletionIds();
           for (const [id, deletedAt] of Object.entries(remote.tombstones || {})) {
-            if (protectedOfflineIds.has(id)) continue;
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+            if (protectedOfflineIds.has(id)||firebaseProjectProtected(id)) continue;
             const localRecord = localMap.get(id);
             if (localRecord && (Date.parse(deletedAt) || 0) >= getRecordUpdatedAt(localRecord)) {
               await createProjectBackup(localRecord, 'firebase-delete-recovery');
-              await deleteProjectRecord(id, { syncCloud: false });
+              await applyFirebaseRemote({id,deletedAt});
             }
           }
           for (const meta of Object.values(remote.records || {})) {
-            if (protectedOfflineIds.has(meta.id) || protectedDeletionIds.has(meta.id)) continue;
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+            if (protectedOfflineIds.has(meta.id) || protectedDeletionIds.has(meta.id) || firebaseProjectProtected(meta.id)) continue;
             const localRecord = localMap.get(meta.id);
             if (!localRecord || Date.parse(meta.updatedAt || '') > getRecordUpdatedAt(localRecord)) {
               // Never replace an open project while the user is still writing.
@@ -5454,23 +5477,26 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
                 continue;
               }
               const remoteRecord = await firebaseLoadRecord(meta);
+              if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
               if (remoteRecord) {
                 if (localRecord && JSON.stringify(localRecord) !== JSON.stringify(remoteRecord)) {
                   await createProjectBackup(localRecord, 'firebase-merge-recovery');
                 }
-                await persistProjectRecord(remoteRecord);
+                await applyFirebaseRemote({record:remoteRecord});
               }
             }
           }
           const refreshed = await readAllProjectRecords();
           for (const localRecord of refreshed) {
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+            if(firebaseProjectProtected(localRecord.id))continue;
             if (protectedOfflineIds.has(localRecord.id) || protectedDeletionIds.has(localRecord.id)) continue;
             const remoteMeta = remote.records?.[localRecord.id];
             const tombstoneAt = Date.parse(remote.tombstones?.[localRecord.id] || '') || 0;
             if (tombstoneAt > getRecordUpdatedAt(localRecord)) continue;
             if (!remoteMeta || getRecordUpdatedAt(localRecord) > Date.parse(remoteMeta.updatedAt || '')) await firebaseUploadRecord(localRecord);
           }
-          await renderProjectCards();
+          if(!hasOpenWorkspaceEditor()&&!projectManagerView.hidden)await renderProjectCards();else projectManagerNeedsRefresh=true;
         } finally {
           firebaseRunning = false;
           const pendingRemote = firebasePendingRemote;
@@ -5526,6 +5552,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 
       async function flushPendingFirebaseRecords() {
         if (!firebaseUser || !firebaseDb || navigator.onLine === false || firebaseSyncInProgress) return false;
+        if(isContinuousInteractionActive()){clearTimeout(firebaseSyncTimer);firebaseSyncTimer=setTimeout(()=>flushPendingFirebaseRecords(),10000);return false;}
         firebaseSyncInProgress = true;
         updateCloudAccountUi();
         let shouldRefreshFromCloud = false;
@@ -5534,6 +5561,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           await loadPersistentFirebaseQueue();
           if (!(await flushPendingFirebaseDeletions())) completed = false;
           for (const [projectId, record] of Array.from(pendingFirebaseRecords.entries())) {
+            if(isContinuousInteractionActive()){completed=false;break;}
             try {
               const uploaded = await firebaseUploadRecord(record);
               // Un proiect mai vechi decât copia din cloud nu trebuie să oprească
@@ -6809,6 +6837,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         );
       }
 
+      window.atelierIsWriting = isContinuousInteractionActive;
+
       function openAutosaveRecoveryDialog() {
         autosaveRecoveryDialog.hidden = false;
         requestAnimationFrame(() => {
@@ -6976,7 +7006,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.26.6');
+          const viewer = await import('./models/viewer.js?v=1.26.7');
           const projectId = activeProjectId;
           const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -7870,8 +7900,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       function updateFullscreenFrame() {
         if (!fullscreenMode) return;
         const visualViewport = window.visualViewport;
-        const viewportWidth = Math.round(visualViewport?.width || window.innerWidth);
-        const viewportHeight = Math.round(visualViewport?.height || window.innerHeight);
+        const viewportWidth = Math.round(overlay?.clientWidth || visualViewport?.width || window.innerWidth);
+        const viewportHeight = Math.round(overlay?.clientHeight || visualViewport?.height || window.innerHeight);
         fullscreenFrame = { width: viewportWidth, height: viewportHeight };
         const shell = document.getElementById('canvasShell');
         if (shell) {
@@ -9403,10 +9433,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       function getFloatingToolbarBounds() {
         const toggleWidth = fullscreenToolbarToggle?.offsetWidth || 44;
         const toggleHeight = fullscreenToolbarToggle?.offsetHeight || 44;
-        const minX = 10;
-        const minY = 10;
-        const maxX = Math.max(minX, window.innerWidth - toggleWidth - 10);
-        const maxY = Math.max(minY, window.innerHeight - toggleHeight - 10);
+        const safe = overlay.getBoundingClientRect();
+        const minX = safe.left + 10;
+        const minY = safe.top + 10;
+        const maxX = Math.max(minX, safe.right - toggleWidth - 10);
+        const maxY = Math.max(minY, safe.bottom - toggleHeight - 10);
         return { minX, minY, maxX, maxY };
       }
 
@@ -9451,10 +9482,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const buttonRect = fullscreenToolbarToggle.getBoundingClientRect();
         const toolbarRect = fullscreenDrawingToolbar.getBoundingClientRect();
         const offset = 12;
-        const spaceRight = window.innerWidth - buttonRect.right;
-        const spaceLeft = buttonRect.left;
-        const spaceBelow = window.innerHeight - buttonRect.bottom;
-        const spaceAbove = buttonRect.top;
+        const safe = overlay.getBoundingClientRect();
+        const spaceRight = safe.right - buttonRect.right;
+        const spaceLeft = buttonRect.left - safe.left;
+        const spaceBelow = safe.bottom - buttonRect.bottom;
+        const spaceAbove = buttonRect.top - safe.top;
         const fitsRight = spaceRight >= toolbarRect.width + offset;
         const fitsLeft = spaceLeft >= toolbarRect.width + offset;
 
@@ -9467,7 +9499,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         // Pe tabletă bara completă nu încape mereu lângă butonul flotant.
         // O așezăm centrată sub el, ca să nu ascundem ultimele comenzi.
         if (!fitsRight && !fitsLeft) {
-          left = (window.innerWidth - toolbarRect.width) / 2;
+          left = safe.left + (safe.width - toolbarRect.width) / 2;
           if (spaceBelow >= toolbarRect.height + offset) {
             top = buttonRect.bottom + offset;
           } else if (spaceAbove >= toolbarRect.height + offset) {
@@ -9476,11 +9508,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         } else if (spaceBelow < toolbarRect.height + offset && spaceAbove > toolbarRect.height + offset) {
           top = buttonRect.bottom - toolbarRect.height;
         }
-        left = clamp(left, 10, Math.max(10, window.innerWidth - toolbarRect.width - 10));
-        if (top + toolbarRect.height > window.innerHeight - 10) {
-          top = window.innerHeight - toolbarRect.height - 10;
-        }
-        top = clamp(top, 10, Math.max(10, window.innerHeight - toolbarRect.height - 10));
+        left = clamp(left, safe.left + 10, Math.max(safe.left + 10, safe.right - toolbarRect.width - 10));
+        top = clamp(top, safe.top + 10, Math.max(safe.top + 10, safe.bottom - toolbarRect.height - 10));
 
         fullscreenDrawingToolbar.style.left = `${left}px`;
         fullscreenDrawingToolbar.style.top = `${top}px`;
@@ -12331,9 +12360,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.26.6"></script>
+<script src="notes/notes-editor.js?v=1.26.7"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
-<script src="inventory/inventory.js?v=1.24.10"></script>
+<script src="inventory/inventory.js?v=1.26.7"></script>
 
 <style id="workspace-account-notes-layout-v1238">
   #workspaceNotes .workspace-notes-heading {
@@ -13438,7 +13467,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory .workspace-inventory-heading>.manager-search{grid-area:search!important;width:100%!important;min-width:0!important}
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
-<link rel="stylesheet" href="./workspace-polish.css?v=1.26.6">
+<link rel="stylesheet" href="./workspace-polish.css?v=1.26.7">
+<link rel="stylesheet" href="./app-safe-area.css?v=1.26.7">
 </body>
 </html>
 

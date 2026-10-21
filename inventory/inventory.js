@@ -43,47 +43,60 @@
   function blobToDataUrl(blob){return new Promise((resolve,reject)=>{if(typeof blob==='string'){resolve(blob);return;}const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(Error('Imaginea materialului nu a putut fi pregătită pentru sincronizare.'));reader.readAsDataURL(blob);});}
   function dataUrlToBlob(value){if(typeof value!=='string'||!value.startsWith('data:'))return value;const [header,data]=value.split(',',2),mime=header.match(/^data:([^;]+)/)?.[1]||'image/jpeg',binary=atob(data||''),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:mime});}
   async function cloudItem(item){return {...item,image:await blobToDataUrl(item.image),updatedAt:toIso(item.updatedAt)};}
+  async function applyRemoteRecord({id,value,deletedAt,local,localDeleted,folder=false}){
+    const name=folder?'folders':storeName,deleted=folder?'folderTombstones':tombstoneStore;
+    return new Promise((resolve,reject)=>{const tx=db.transaction([name,deleted],'readwrite'),records=tx.objectStore(name),tombstones=tx.objectStore(deleted),a=records.get(id),b=tombstones.get(id);let reads=0,applied=false;
+      const ready=()=>{if(++reads<2)return;const current=a.result,tombstone=b.result;if(Boolean(current)!==Boolean(local)||timestamp(current?.updatedAt)!==timestamp(local?.updatedAt)||timestamp(tombstone?.deletedAt)!==timestamp(localDeleted)){cloudSyncRequested++;return;}
+        if(deletedAt){records.delete(id);tombstones.put({id,deletedAt:toIso(deletedAt)});}else{records.put(value);tombstones.delete(id);}applied=true;};a.onsuccess=ready;b.onsuccess=ready;tx.oncomplete=()=>resolve(applied);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Sincronizare întreruptă'));});
+  }
+  const writingBusy=()=>Boolean(window.atelierIsWriting?.()||window.atelierNotes?.manager?.editor?.isBusy());
+  const deferDuringWriting=()=>{if(!writingBusy())return false;cloudSyncRequested++;return true;};
   async function syncFolders(cloud){
     const localFolders=await allFolders(),localDeletes=await allFolderTombstones(),localById=new Map(localFolders.map(folder=>[folder.id,folder])),localDeleteById=new Map(localDeletes.map(item=>[item.id,item.deletedAt]));
     const versions=Object.fromEntries(localFolders.map(folder=>[folder.id,toIso(folder.updatedAt)])),remote=await cloud.pullFolders(versions),remoteById=new Map((remote.folders||[]).map(folder=>[folder.id,folder])),remoteMetaById=new Map(Object.entries(remote.metas||{})),remoteDeleteById=new Map(Object.entries(remote.tombstones||{}));
+    if(deferDuringWriting())return false;
     const ids=new Set([...localById.keys(),...remoteMetaById.keys(),...localDeleteById.keys(),...remoteDeleteById.keys()]);
     for(const id of ids){
+      if(deferDuringWriting())return false;
       const local=localById.get(id),remoteFolder=remoteById.get(id),remoteMeta=remoteMetaById.get(id),localDeleted=localDeleteById.get(id),remoteDeleted=remoteDeleteById.get(id);
       const localAt=timestamp(local?.updatedAt),remoteAt=timestamp(remoteMeta?.updatedAt||remoteFolder?.updatedAt),localDeleteAt=timestamp(localDeleted),remoteDeleteAt=timestamp(remoteDeleted);
       const localWinsDelete=Boolean(localDeleted)&&localDeleteAt>=Math.max(remoteAt,remoteDeleteAt),remoteWinsDelete=Boolean(remoteDeleted)&&remoteDeleteAt>=Math.max(localAt,localDeleteAt);
-      if(localWinsDelete){if(local)await writeLocalFolderTombstone(id,localDeleted);if(localDeleteAt>remoteDeleteAt)await cloud.removeFolder(id,toIso(localDeleted));continue;}
-      if(remoteWinsDelete){if(local||!localDeleted||localDeleteAt<remoteDeleteAt)await writeLocalFolderTombstone(id,remoteDeleted);continue;}
+      if(localWinsDelete){if(local)await applyRemoteRecord({id,deletedAt:localDeleted,local,localDeleted,folder:true});if(localDeleteAt>remoteDeleteAt)await cloud.removeFolder(id,toIso(localDeleted));continue;}
+      if(remoteWinsDelete){if(local||!localDeleted||localDeleteAt<remoteDeleteAt)await applyRemoteRecord({id,deletedAt:remoteDeleted,local,localDeleted,folder:true});continue;}
       if(local&&(!remoteMeta||localAt>remoteAt)){await cloud.saveFolder({...local,updatedAt:toIso(local.updatedAt)});continue;}
-      if(remoteMeta&&(!local||remoteAt>localAt)&&remoteFolder)await writeLocalFolder({...remoteFolder,updatedAt:toIso(remoteFolder.updatedAt)});
+      if(remoteMeta&&(!local||remoteAt>localAt)&&remoteFolder)await applyRemoteRecord({id,value:{...remoteFolder,updatedAt:toIso(remoteFolder.updatedAt)},local,localDeleted,folder:true});
     }
     folders=await allFolders();if(activeCategory&&!folders.some(folder=>folder.id===activeCategory)){activeCategory=null;search.value='';query='';}
   }
   async function syncInventory(){
     const cloud=window.atelierInventoryCloud;
     if(!db||!cloud?.connected())return false;
+    if(writingBusy()){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncInventory(),10000);return false;}
     if(cloudSyncPromise)return cloudSyncPromise;
     const requestAtStart=cloudSyncRequested;
     cloudSyncPromise=(async()=>{
-      await syncFolders(cloud);
+      if(await syncFolders(cloud)===false||deferDuringWriting())return false;
       const localItems=await all(),localDeletes=await allTombstones(),localById=new Map(localItems.map(item=>[item.id,item])),localDeleteById=new Map(localDeletes.map(item=>[item.id,item.deletedAt]));
       const localVersions=Object.fromEntries(localItems.map(item=>[item.id,toIso(item.updatedAt)]));
       const remote=await cloud.pull(localVersions),remoteById=new Map((remote.items||[]).map(item=>[item.id,item])),remoteMetaById=new Map(Object.entries(remote.metas||{})),remoteDeleteById=new Map(Object.entries(remote.tombstones||{}));
+      if(deferDuringWriting())return false;
       const ids=new Set([...localById.keys(),...remoteMetaById.keys(),...localDeleteById.keys(),...remoteDeleteById.keys()]);
       for(const id of ids){
+        if(deferDuringWriting())return false;
         const local=localById.get(id),remoteItem=remoteById.get(id),remoteMeta=remoteMetaById.get(id),localDeleted=localDeleteById.get(id),remoteDeleted=remoteDeleteById.get(id);
         const localAt=timestamp(local?.updatedAt),remoteAt=timestamp(remoteMeta?.updatedAt||remoteItem?.updatedAt),localDeleteAt=timestamp(localDeleted),remoteDeleteAt=timestamp(remoteDeleted);
         const localWinsDelete=Boolean(localDeleted)&&localDeleteAt>=Math.max(remoteAt,remoteDeleteAt);
         const remoteWinsDelete=Boolean(remoteDeleted)&&remoteDeleteAt>=Math.max(localAt,localDeleteAt);
-        if(localWinsDelete){if(local)await writeLocalTombstone(id,localDeleted);if(localDeleteAt>remoteDeleteAt)await cloud.remove(id,toIso(localDeleted));continue;}
-        if(remoteWinsDelete){if(local||!localDeleted||localDeleteAt<remoteDeleteAt)await writeLocalTombstone(id,remoteDeleted);continue;}
+        if(localWinsDelete){if(local)await applyRemoteRecord({id,deletedAt:localDeleted,local,localDeleted});if(localDeleteAt>remoteDeleteAt)await cloud.remove(id,toIso(localDeleted));continue;}
+        if(remoteWinsDelete){if(local||!localDeleted||localDeleteAt<remoteDeleteAt)await applyRemoteRecord({id,deletedAt:remoteDeleted,local,localDeleted});continue;}
         if(local&&(!remoteMeta||localAt>remoteAt)){await cloud.save(await cloudItem(local));continue;}
-        if(remoteMeta&&(!local||remoteAt>localAt)&&remoteItem){await writeLocalItem({...remoteItem,image:dataUrlToBlob(remoteItem.image),updatedAt:toIso(remoteItem.updatedAt)});continue;}
-        if(remoteDeleted&&localDeleteAt<=remoteDeleteAt&&!local){await writeLocalTombstone(id,remoteDeleted);}
+        if(remoteMeta&&(!local||remoteAt>localAt)&&remoteItem){await applyRemoteRecord({id,value:{...remoteItem,image:dataUrlToBlob(remoteItem.image),updatedAt:toIso(remoteItem.updatedAt)},local,localDeleted});continue;}
+        if(remoteDeleted&&localDeleteAt<=remoteDeleteAt&&!local){await applyRemoteRecord({id,deletedAt:remoteDeleted,local,localDeleted});}
       }
-      items=await all();render();
+      items=await all();if(!panel.hidden)render();
       announce(window.atelierInventoryCloud?.connected()?'Inventarul este sincronizat între dispozitive.':'Inventarul este salvat local.');
       return true;
-    })().catch(error=>{console.warn('Sincronizarea inventarului va reîncerca.',error);announce('Inventarul rămâne salvat pe acest dispozitiv. Sincronizarea va reîncerca automat.',true);return false;}).finally(()=>{cloudSyncPromise=null;if(cloudSyncRequested>requestAtStart)scheduleCloudSync();});
+    })().catch(error=>{console.warn('Sincronizarea inventarului va reîncerca.',error);announce('Inventarul rămâne salvat pe acest dispozitiv. Sincronizarea va reîncerca automat.',true);cloudSyncRequested++;return false;}).finally(()=>{cloudSyncPromise=null;if(cloudSyncRequested>requestAtStart){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncInventory(),5000);}});
     return cloudSyncPromise;
   }
   function scheduleCloudSync(){cloudSyncRequested+=1;window.clearTimeout(cloudSyncTimer);if(window.atelierInventoryCloud?.connected())cloudSyncTimer=window.setTimeout(()=>syncInventory(),180);}

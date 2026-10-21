@@ -137,6 +137,16 @@
       meta.put(pending,'syncPending');meta.put(deletes,'syncDeletes');
       await finished;
     }
+    async applyRemote({note,id=note?.id,deletedAt,protectedNow=()=>false}) {
+      const tx=this.db.transaction(['notes','meta'],'readwrite'),done=this.done(tx),records=tx.objectStore('notes'),meta=tx.objectStore('meta');
+      const [local,pending,deletes]=await Promise.all([this.request(records.get(id)),this.request(meta.get('syncPending')),this.request(meta.get('syncDeletes'))]);
+      let applied=false;
+      if(!pending?.[id]&&!deletes?.[id]&&!protectedNow()){
+        if(note&&(!local||Date.parse(note.updatedAt)>Date.parse(local.updatedAt))){records.put(copy(note));applied=true;}
+        else if(deletedAt&&local&&Date.parse(deletedAt)>=Date.parse(local.updatedAt)){records.delete(id);applied=true;}
+      }
+      await done;return applied;
+    }
     async queueNote(note) {await this.updateQueue({note});}
     async queueDelete(id,deletedAt) {await this.updateQueue({id,deletedAt,removeLocal:true});}
     async clearPendingNote(id,updatedAt) {await this.updateQueue({id,clearNoteAt:updatedAt});}
@@ -702,19 +712,23 @@
     connected(){return Boolean(this.cloud()?.connected?.());}
     syncSoon(delay=650){clearTimeout(this.syncTimer);const idleDelay=this.editor?.root?.isConnected?Math.max(delay,AUTOSAVE_IDLE_MS):delay;this.syncTimer=setTimeout(()=>this.sync().catch(()=>{}),idleDelay);}
     async sync(){
-      if(this.editor?.isBusy()){this.syncSoon(3200);return false;}if(this.syncing||!this.store.db||!this.connected())return false;this.syncing=true;if(!this.editor)this.status.textContent='Notițele se sincronizează…';
+      if(this.editor?.isBusy()||window.atelierIsWriting?.()){this.syncSoon();return false;}
+      if(this.syncing){this.syncRequested=true;return false;}
+      if(!this.store.db||!this.connected())return false;
+      this.syncing=true;let retry=false;if(!this.editor)this.status.textContent='Notițele se sincronizează…';
+      const busy=()=>Boolean(this.editor?.isBusy()||window.atelierIsWriting?.()),protectedNow=id=>this.editor?.note.id===id&&(this.editor.dirty||busy());
       try{
-        const cloud=this.cloud(),pending=await this.store.pending();if(this.editor?.isBusy()){this.syncSoon();return false;}
-        for(const [id,deletedAt] of Object.entries(pending.deletes)){await cloud.remove(id,deletedAt);await this.store.clearPendingDelete(id,deletedAt);}
-        for(const note of Object.values(pending.notes)){await cloud.save(note);if(this.editor?.isBusy()){this.syncSoon();return false;}await this.store.clearPendingNote(note.id,note);}
-        const remote=await cloud.pull(),local=await this.store.all();if(this.editor?.isBusy()){this.syncSoon();return false;}const localMap=new Map(local.map(note=>[note.id,note]));
-        for(const [id,deletedAt] of Object.entries(remote.tombstones||{})){const note=localMap.get(id);if(note&&(Date.parse(deletedAt)||0)>=(Date.parse(note.updatedAt)||0)){await this.store.remove(id,{sync:false});localMap.delete(id);}}
-        for(const note of remote.notes||[]){const localNote=localMap.get(note.id);if(!localNote||(Date.parse(note.updatedAt)||0)>(Date.parse(localNote.updatedAt)||0)){await this.store.put(note,{sync:false});localMap.set(note.id,note);if(this.editor?.note.id===note.id&&!this.editor.dirty&&!this.editor.isBusy()){this.editor.note=copy(note);this.editor.pageIndex=clamp(note.activePage||0,0,note.pages.length-1);this.editor.refresh();}}}
-        for(const note of localMap.values()){const remoteNote=(remote.notes||[]).find(item=>item.id===note.id),deletedAt=Date.parse(remote.tombstones?.[note.id]||'')||0;if(deletedAt>(Date.parse(note.updatedAt)||0))continue;if(!remoteNote||(Date.parse(note.updatedAt)||0)>(Date.parse(remoteNote.updatedAt)||0))await cloud.save(note);}
-        this.syncError='';if(this.editor&&!this.editor.dirty)this.editor.status('Salvat și sincronizat');
-        return true;
-      }catch(error){this.syncError='Notițele sunt salvate local. Sincronizarea va reîncerca automat.';if(this.editor)this.editor.status('Salvat local · sincronizarea va reîncerca.',true);throw error;}
-      finally{this.syncing=false;if(!this.editor)await this.render();}
+        const cloud=this.cloud(),pending=await this.store.pending();if(busy()){retry=true;return false;}
+        for(const [id,deletedAt] of Object.entries(pending.deletes)){if(busy()){retry=true;return false;}await cloud.remove(id,deletedAt);await this.store.clearPendingDelete(id,deletedAt);}
+        for(const note of Object.values(pending.notes)){if(busy()){retry=true;return false;}await cloud.save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);}
+        if(busy()){retry=true;return false;}const remote=await cloud.pull();if(busy()){retry=true;return false;}
+        for(const [id,deletedAt] of Object.entries(remote.tombstones||{})){if(busy()){retry=true;return false;}await this.store.applyRemote({id,deletedAt,protectedNow:()=>protectedNow(id)});}
+        for(const note of remote.notes||[]){if(busy()){retry=true;return false;}const applied=await this.store.applyRemote({note,protectedNow:()=>protectedNow(note.id)});if(applied&&this.editor?.note.id===note.id&&!protectedNow(note.id)){this.editor.note=copy(note);this.editor.pageIndex=clamp(note.activePage||0,0,note.pages.length-1);this.editor.refresh();}}
+        const remoteById=new Map((remote.notes||[]).map(note=>[note.id,note])),local=await this.store.all();
+        for(const note of local){if(busy()){retry=true;return false;}const remoteNote=remoteById.get(note.id),deletedAt=Date.parse(remote.tombstones?.[note.id]||'')||0;if(deletedAt>(Date.parse(note.updatedAt)||0))continue;if(!remoteNote||(Date.parse(note.updatedAt)||0)>(Date.parse(remoteNote.updatedAt)||0)){await cloud.save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);}}
+        this.syncError='';if(this.editor&&!this.editor.dirty)this.editor.status('Salvat și sincronizat');return true;
+      }catch(error){retry=true;this.syncError='Notițele sunt salvate local. Sincronizarea va reîncerca automat.';if(this.editor)this.editor.status('Salvat local · sincronizarea va reîncerca.',true);throw error;}
+      finally{this.syncing=false;if(retry||this.syncRequested){this.syncRequested=false;this.syncSoon(5000);}if(!this.editor)await this.render();}
     }
     async projects(){return new Promise(resolve=>{let request;try{request=indexedDB.open('fisa-atelier-offline');}catch{resolve([]);return;}request.onerror=()=>resolve([]);request.onsuccess=()=>{const db=request.result;if(!db.objectStoreNames.contains('projects')){db.close();resolve([]);return;}const transaction=db.transaction('projects','readonly'),read=transaction.objectStore('projects').getAll();read.onerror=()=>{db.close();resolve([]);};read.onsuccess=()=>{const projects=(read.result||[]).map(project=>({id:project.id,name:project.name||project.payload?.projectName||'Proiect fără nume'})).filter(project=>project.id).sort((a,b)=>a.name.localeCompare(b.name,'ro'));db.close();resolve(projects);};};});}
     async details(note,save,linkedProject=null){const projects=await this.projects(),content=el('div','an-form-grid'),title=input(note?.title||'');title.required=true;title.maxLength=160;title.placeholder='De exemplu: Măsurători bucătărie';const projectChoices=[['','Fără proiect asociat'],...projects.map(project=>[project.id,project.name])],project=select(projectChoices,note?.projectId||'');content.append(field('Titlu notiță',title));if(!linkedProject)content.append(field('Proiect asociat (opțional)',project));let template;if(!note){template=this.pageTemplates();content.append(template.node);}else content.append(el('p','an-hint',`Creată ${date(note.createdAt)} · Modificată ${date(note.updatedAt)}`));dialog(note?'Detaliile notiței':'Notiță nouă',content,async()=>{if(!title.value.trim())throw Error('Introdu un titlu.');const selectedProject=linkedProject||projects.find(item=>item.id===project.value);const relation={projectId:selectedProject?.id||'',projectName:selectedProject?.name||''};const next=note?{title:title.value.trim(),...relation}:{id:uid(),schema:1,title:title.value.trim(),description:'',...relation,createdAt:now(),updatedAt:now(),pages:[pageData(template.value.orientation,template.value.paper)]};await save(next);},note?'Salvează':'Creează');}
