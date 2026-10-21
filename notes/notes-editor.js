@@ -226,7 +226,7 @@
       else if(o.type==='image'&&images.get(o.src))ImageObject.paint(ctx,o,images.get(o.src));
       else if(o.type==='drawing')DrawingLayer.paint(ctx,o);
       else if(o.type==='shape'){ctx.strokeStyle=o.color;ctx.fillStyle=o.fill||'transparent';ctx.lineWidth=o.width;ctx.beginPath();if(o.shape==='ellipse')ctx.ellipse(o.w/2,o.h/2,Math.max(1,o.w/2-2),Math.max(1,o.h/2-2),0,0,Math.PI*2);else if(o.shape==='arrow'){ctx.moveTo(0,o.h/2);ctx.lineTo(o.w,o.h/2);ctx.moveTo(o.w-o.w*.25,0);ctx.lineTo(o.w,o.h/2);ctx.lineTo(o.w-o.w*.25,o.h);}else ctx.rect(1,1,o.w-2,o.h-2);ctx.fill();ctx.stroke();}ctx.restore();}
-    static async render(page,scale=1) {const images=new Map(); await document.fonts.ready;await Promise.all(page.objects.flatMap(o=>o.type==='image'?[o.src]:o.type==='text'&&o.appearance?.src?[o.appearance.src]:[]).map(async src=>images.set(src,await ImageObject.load(src))));const [w,h]=size(page),c=el('canvas');c.width=Math.round(w*scale);c.height=Math.round(h*scale);const ctx=c.getContext('2d');ctx.scale(scale,scale);this.paint(ctx,page,images);return c;}
+    static async render(page,scale=1,canPaint=()=>true) {const images=new Map(); await document.fonts.ready;await Promise.all(page.objects.flatMap(o=>o.type==='image'?[o.src]:o.type==='text'&&o.appearance?.src?[o.appearance.src]:[]).map(async src=>images.set(src,await ImageObject.load(src))));if(!canPaint())return null;const [w,h]=size(page),c=el('canvas');c.width=Math.round(w*scale);c.height=Math.round(h*scale);const ctx=c.getContext('2d');ctx.scale(scale,scale);this.paint(ctx,page,images);return c;}
   }
   class Export {
     static async pdf(note) {if(!window.PDFLib)throw Error('Biblioteca PDF lipsește. Încarcă și folderul notes pe site.');const pdf=await PDFLib.PDFDocument.create();for(const p of note.pages){const c=await A4Canvas.render(p,2),bytes=await (await fetch(c.toDataURL('image/png'))).arrayBuffer(),img=await pdf.embedPng(bytes);const dims=p.orientation==='landscape'?[841.89,595.28]:[595.28,841.89];pdf.addPage(dims).drawImage(img,{x:0,y:0,width:dims[0],height:dims[1]});}pdf.setTitle(note.title);return new Blob([await pdf.save()],{type:'application/pdf'});}
@@ -264,24 +264,41 @@
     destroy(){this.observer?.disconnect();clearTimeout(this.previewTimer);this.previewTimer=null;this.previewQueue=[];this.generation=(this.generation||0)+1;}
     queuePreview(job){this.previewQueue.push(job);this.schedulePreview();}
     schedulePreview(){if(this.previewTimer||this.previewRunning)return;this.previewTimer=setTimeout(()=>{this.previewTimer=null;this.renderPreview();},120);}
+    // Navigation may refresh visible previews; the next content edit pauses them again.
+    previewBusy(){const e=this.e;return Boolean(e.gesture||e.textComposing||e.textEditor||e.isBusy()&&this.navigationRevision!==e.revision);}
+    currentCanvasReady(page){
+      const e=this.e;if(page!==e.page||e.frame||e.textEditor)return false;
+      return page.objects.every(o=>o.type==='image'?Boolean(e.images.get(o.src)):o.type==='text'&&o.appearance?.src?ImageObject.resolved.has(o.appearance.src):true);
+    }
     async renderPreview(){
       if(!this.previewQueue.length||!this.node.isConnected)return;
-      if(this.e.isBusy()){this.schedulePreview();return;}
-      const job=this.previewQueue.shift(),generation=this.generation;this.previewRunning=true;
-      try{if(job.card.isConnected){const render=job.page===this.e.page?this.e.canvas:await A4Canvas.render(job.page,.18);if(generation===this.generation&&job.card.isConnected)job.canvas.getContext('2d').drawImage(render,0,0,job.canvas.width,job.canvas.height);}}
+      let index=0;
+      if(this.previewBusy()){
+        index=this.previewQueue.findIndex(job=>this.currentCanvasReady(job.page));
+        if(this.e.gesture||this.e.textComposing||index<0){this.schedulePreview();return;}
+      }
+      const job=this.previewQueue.splice(index,1)[0],generation=this.generation;this.previewRunning=true;
+      try{if(job.card.isConnected){
+        const render=this.currentCanvasReady(job.page)?this.e.canvas:await A4Canvas.render(job.page,.18,()=>generation===this.generation&&!this.previewBusy());
+        if(generation===this.generation&&job.card.isConnected){
+          if(!render||this.e.gesture){this.previewQueue.unshift(job);return;}
+          const ctx=job.canvas.getContext('2d');ctx.clearRect(0,0,job.canvas.width,job.canvas.height);ctx.drawImage(render,0,0,job.canvas.width,job.canvas.height);
+        }
+      }}
       catch(error){if(generation===this.generation)this.e.status(error.message,true);}
       finally{this.previewRunning=false;if(this.previewQueue.length)this.schedulePreview();}
     }
     render() {
       const previousList=this.node.querySelector('.an-pages-list'),scrollTop=previousList?.scrollTop||0,scrollLeft=previousList?.scrollLeft||0;
+      const previews=new Map([...this.node.querySelectorAll('.an-page-item')].map(item=>[item.dataset.pageId,item.querySelector('canvas')]));
       this.destroy();this.previewQueue=[];
       this.node.replaceChildren();const e=this.e,head=el('div','an-pages-head');const title=el('strong','an-pages-title','Pagini');title.append(el('span','an-pages-count',String(e.note.pages.length)));head.append(title,button('Închide panoul de pagini',()=>e.togglePages(),'close','an-icon'));this.node.append(head);const add=button('Adaugă pagină',()=>this.add(),'plus','an-page-add');this.node.append(add);
       const list=el('div','an-pages-list');this.node.append(list);const jobs=new WeakMap();
       this.observer=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){this.observer.unobserve(entry.target);this.queuePreview(jobs.get(entry.target));}},{root:list,rootMargin:'120px'}):null;
       e.note.pages.forEach((p,i)=>{
-        const wrap=el('div','an-page-item'),name=String(p.title||'').trim()||`Pagina ${i+1}`;
+        const wrap=el('div','an-page-item'),name=String(p.title||'').trim()||`Pagina ${i+1}`;wrap.dataset.pageId=p.id;
         const card=button(name,()=>e.switchPage(i));card.classList.add('an-page-thumb');card.setAttribute('aria-current',String(i===e.pageIndex));
-        const c=el('canvas');c.width=120;c.height=Math.round(120*size(p)[1]/size(p)[0]);card.prepend(c);
+        const c=previews.get(p.id)||el('canvas'),height=Math.round(120*size(p)[1]/size(p)[0]);if(c.width!==120)c.width=120;if(c.height!==height)c.height=height;card.prepend(c);
         const rename=button('Opțiuni pagină: nume și poziție',()=>this.rename(i),'more','an-icon an-page-rename'),meta=el('div','an-page-meta');
         meta.append(card.lastElementChild,rename);wrap.append(card,meta);list.append(wrap);
         jobs.set(wrap,{card,canvas:c,page:p});if(this.observer)this.observer.observe(wrap);else this.queuePreview(jobs.get(wrap));
@@ -502,7 +519,7 @@
     undo(){this.cancelCrop();this.endText();if(!this.past.length)return;this.future.push(copy(this.note));this.note=this.past.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     redo(){this.cancelCrop();this.endText();if(!this.future.length)return;this.past.push(copy(this.note));this.note=this.future.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     setTool(tool){this.cancelCrop();this.endText();this.tool=tool==='marker'?'pencil':tool;this.drawKind=this.tool==='pencil'?'pencil':this.drawKind;this.selected=null;this.refresh(false);}
-    switchPage(i){this.cancelCrop();this.endText();this.pageIndex=i;this.selected=null;this.changed();this.refresh();this.fit();}
+    switchPage(i){this.cancelCrop();this.endText();this.pageIndex=i;this.selected=null;this.changed();this.pages.navigationRevision=this.revision;this.refresh();this.fit();}
     refresh(pages=true){const sources=this.page.objects.flatMap(o=>o.type==='image'?[o.src]:o.type==='text'&&o.appearance?.src?[o.appearance.src]:[]);ImageObject.retain(sources);for(const src of this.images.keys())if(!sources.includes(src))this.images.delete(src);this.title.textContent=this.note.title;this.pageLabel.textContent=`${String(this.page.title||'').trim()||`Pagina ${this.pageIndex+1}`} · ${this.pageIndex+1} / ${this.note.pages.length} · A4 ${this.page.orientation==='portrait'?'vertical':'orizontal'}`;const [w,h]=size(this.page);this.sheet.style.width=`${w}px`;this.sheet.style.height=`${h}px`;this.canvas.width=this.liveCanvas.width=w*2;this.canvas.height=this.liveCanvas.height=h*2;this.canvas.style.width=this.liveCanvas.style.width=`${w}px`;this.canvas.style.height=this.liveCanvas.style.height=`${h}px`;this.applyZoom();this.toolbar.render();this.selection.render();if(pages)this.pages.render();this.requestPaint();}
     requestPaint(){if(this.frame)return;this.frame=requestAnimationFrame(()=>{this.frame=null;if(!this.root.isConnected)return;const ctx=this.canvas.getContext('2d');ctx.setTransform(2,0,0,2,0,0);A4Canvas.paint(ctx,this.page,this.images,this.textEditor?this.selected:this.cropSession?.objectId);if(this.preview&&this.preview.type!=='drawing')A4Canvas.object(ctx,this.preview,this.images);for(const o of this.page.objects){if(o.type==='text'&&o.appearance?.src&&!ImageObject.resolved.has(o.appearance.src)){ImageObject.load(o.appearance.src).then(()=>{TextObject.cache.delete(o);this.requestPaint();}).catch(error=>this.status(error.message,true));}if(o.type==='image'&&!this.images.has(o.src)){this.images.set(o.src,null);ImageObject.load(o.src).then(img=>{if(!this.root.isConnected||!this.page.objects.some(item=>item.type==='image'&&item.src===o.src))return;this.images.set(o.src,img);this.requestPaint();}).catch(error=>this.status(error.message,true));}}});}
     queueLivePaint(){if(this.preview?.kind==='pencil'){this.paintLiveStroke();return;}if(this.liveFrame)return;this.liveFrame=requestAnimationFrame(()=>{this.liveFrame=null;this.paintLiveStroke();});}
