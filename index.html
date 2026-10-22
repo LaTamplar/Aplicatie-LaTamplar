@@ -4799,7 +4799,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.8';
+      const APP_VERSION = '1.26.9';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -4835,7 +4835,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       // fotografii trebuie scris în mai multe porții, chiar dacă fiecare bucată
       // individuală este sub limita unui document.
       const firebaseChunkBatchSize = 12;
-      let firebaseApp = null, firebaseAuth = null, firebaseDb = null, firebaseRealtimeDb = null, firebaseUser = null, firebaseManifestRef = null, firebaseManifest = null, firebaseManifestUnsubscribe = null, firebaseRealtimeSignalRef = null, firebaseRealtimeSignalListener = null, firebaseRealtimeSignalPrimed = false, firebaseSyncTimer = null, firebaseLiveRefreshTimer = null, firebaseRunning = false, firebasePendingRemote = null, firebaseManagerRefreshTimer = null, firebaseManagerLastInteractionAt = Date.now(), firebaseInitialized = false, firebaseLastRemoteUpdatedAt = '', firebaseLastRealtimeSignalAt = '', firebaseSyncInProgress = false, firebasePendingDeletionCount = 0, firebaseLastSyncError = '';
+      let firebaseApp = null, firebaseAuth = null, firebaseDb = null, firebaseRealtimeDb = null, firebaseUser = null, firebaseManifestRef = null, firebaseManifest = null, firebaseManifestUnsubscribe = null, firebaseRealtimeSignalRef = null, firebaseRealtimeSignalListener = null, firebaseRealtimeSignalPrimed = false, firebaseSyncTimer = null, firebaseLiveRefreshTimer = null, firebaseRunning = false, firebasePendingRemote = null, firebaseManagerRefreshTimer = null, firebaseManagerLastInteractionAt = Date.now(), firebaseInitialized = false, firebaseLastRemoteUpdatedAt = '', firebaseLastRealtimeSignalAt = '', firebaseSyncInProgress = false, firebasePendingDeletionCount = 0, firebaseLastSyncError = '', firebaseLastDownloadError = '', firebaseProjectsChecked = false, firebaseCloudProjectCount = 0;
       const pendingFirebaseRecords = new Map();
 
       let googleDriveToken = null, googleDriveTokenExpires = 0, googleDriveFileId = null, googleDriveRemoteModified = '', googleDriveConnected = false, googleDriveAuthorizationNeeded = false, googleDriveTimer = null, googleDrivePoller = null, googleDriveRunning = false, googleDriveSyncScheduled = false;
@@ -4851,8 +4851,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       function isCloudReady() { return Boolean(window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY); }
       function getFirebaseSyncFailureMessage(error) {
         const details = String(error?.code || error?.message || error || '').toLowerCase();
-        if (navigator.onLine === false || details.includes('network') || details.includes('unavailable')) return 'Conexiunea PC-ului a fost întreruptă. Datele rămân salvate local și vor fi retrimise automat.';
-        if (details.includes('permission') || details.includes('unauthenticated')) return 'Contul Google de pe PC nu mai are acces la sincronizare. Deconectează și conectează același cont folosit pe tabletă.';
+        if (navigator.onLine === false || details.includes('network') || details.includes('unavailable')) return 'Conexiunea dispozitivului a fost întreruptă. Datele rămân salvate local și vor fi retrimise automat.';
+        if (details.includes('permission') || details.includes('unauthenticated')) return 'Contul Google nu mai are acces la sincronizare. Deconectează și conectează același cont folosit pe tabletă.';
         if (details.includes('resource-exhausted') || details.includes('quota')) return 'Firebase a refuzat temporar încărcarea. Datele rămân salvate local și vor fi retrimise automat.';
         return 'O copie locală nu a putut fi trimisă încă. Datele rămân salvate local; aplicația va reîncerca automat.';
       }
@@ -4861,12 +4861,28 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         updateCloudAccountUi();
       }
       function clearFirebaseSyncFailure() { firebaseLastSyncError = ''; }
-      function getCloudStatusMessage() { if (firebaseUser) return firebaseLastSyncError || 'Proiectele, notițele și inventarul sunt sincronizate live între tabletă și PC.'; if (firebaseInitialized) return 'Conectează același cont Google pe tabletă și PC pentru a sincroniza proiectele, notițele și inventarul.'; if (!googleDriveConnected) return 'Conectează același cont Google pe PC și tabletă pentru sincronizare live.'; return googleDriveAuthorizationNeeded ? 'Google Drive este configurat. Apasă „Sincronizează acum” pentru a reîmprospăta accesul.' : 'Google Drive este conectat. Proiectele se salvează local și se actualizează automat între tabletă și PC.'; }
+      function firebaseSyncError(){return firebaseLastSyncError||firebaseLastDownloadError;}
+      function noteFirebaseDownloadFailure(error){
+        const details=String(error?.code||error?.message||error||'').toLowerCase();
+        firebaseLastDownloadError=details.includes('permission')||details.includes('unauthenticated')
+          ? 'Contul este conectat, dar accesul la proiectele din cloud a fost refuzat. Verifică dacă folosești același cont Google pe PC și tabletă.'
+          : details.includes('quota')||details.includes('resource-exhausted')
+            ? 'Serviciul de sincronizare și-a atins temporar limita. Proiectele locale sunt păstrate; descărcarea va fi reîncercată.'
+            : details.includes('sync_missing_chunk')||details.includes('sync_invalid_project')
+              ? 'Un proiect din cloud nu poate fi citit complet. Celelalte proiecte se descarcă în continuare; copia locală este păstrată.'
+              : 'Descărcarea proiectelor nu s-a încheiat. Cele deja salvate sunt păstrate; aplicația va reîncerca automat.';
+        updateCloudAccountUi();
+      }
+      function getCloudStatusMessage() { if (firebaseUser) { const account=firebaseUser.email?`Cont Google: ${firebaseUser.email}. `:'';return account+(firebaseSyncError()||(!firebaseProjectsChecked?'Cont conectat. Se verifică proiectele din cloud…':firebaseSyncInProgress||pendingFirebaseRecords.size||firebasePendingDeletionCount?'Datele locale se încarcă în cloud.':firebaseCloudProjectCount===0?'Nu există încă proiecte în cloud pentru acest cont. Pe dispozitivul unde apar, deschide Opțiuni avansate → Încarcă datele acestui dispozitiv.':'Proiectele din cloud au fost verificate. Sincronizarea este activă.')); } if (firebaseInitialized) return 'Conectează același cont Google pe tabletă și PC pentru a sincroniza proiectele, notițele și inventarul.'; if (!googleDriveConnected) return 'Conectează același cont Google pe PC și tabletă pentru sincronizare live.'; return googleDriveAuthorizationNeeded ? 'Google Drive este configurat. Apasă „Sincronizează acum” pentru a reîmprospăta accesul.' : 'Google Drive este conectat. Proiectele se salvează local și se actualizează automat între tabletă și PC.'; }
+      function getEmptyProjectsMessage(){
+        if(!firebaseUser)return 'Nu există proiecte încă. Creează un proiect nou sau importă un fișier existent.';
+        return firebaseSyncError()||(!firebaseProjectsChecked||firebaseRunning?'Se descarcă proiectele din cloud…':firebaseCloudProjectCount===0?'Contul este conectat, dar încă nu sunt proiecte în cloud. Verifică sincronizarea pe dispozitivul unde apar proiectele.':'Proiectele din cloud vor fi afișate după descărcare. Apasă „Sincronizează acum” pentru a reîncerca.');
+      }
       function getSyncIndicatorLabel() {
         if (firebaseUser) {
           if (navigator.onLine === false) return '💾 Salvat local';
-          if (firebaseLastSyncError) return '⚠️ Verifică sincronizarea';
-          return firebaseSyncInProgress || pendingFirebaseRecords.size || firebasePendingDeletionCount ? '↻ Se sincronizează' : '☁️ Sincronizat';
+          if (firebaseSyncError()) return '⚠️ Verifică sincronizarea';
+          return !firebaseProjectsChecked || firebaseRunning || firebaseSyncInProgress || pendingFirebaseRecords.size || firebasePendingDeletionCount ? '↻ Se sincronizează' : '☁️ Sincronizat';
         }
         if (googleDriveConnected && !googleDriveAuthorizationNeeded) {
           if (navigator.onLine === false) return '💾 Salvat local';
@@ -4884,10 +4900,10 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         let state = 'local';
         if (user && navigator.onLine === false) {
           status = 'Offline · salvat local';
-        } else if (user && firebaseLastSyncError) {
+        } else if (user && firebaseSyncError()) {
           status = 'Verifică sincronizarea';
           state = 'warning';
-        } else if (user && (firebaseSyncInProgress || pendingFirebaseRecords.size || firebasePendingDeletionCount)) {
+        } else if (user && (!firebaseProjectsChecked || firebaseRunning || firebaseSyncInProgress || pendingFirebaseRecords.size || firebasePendingDeletionCount)) {
           status = 'Se actualizează acum';
           state = 'syncing';
         } else if (user) {
@@ -4924,6 +4940,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       function updateCloudAccountUi() {
         if (cloudAccountStatus) cloudAccountStatus.textContent = getCloudStatusMessage();
         updateWorkspaceNotesAccountUi();
+        if(projectEmptyState&&!projectEmptyState.hidden&&selectedProjectStatusFilter==='all'&&!projectSearch.value.trim())projectEmptyState.textContent=getEmptyProjectsMessage();
         if (cloudAccountButton && !workspaceSyncName) cloudAccountButton.innerHTML = '<span>Cont și sincronizare</span>';
         if (cloudLoginButton) { cloudLoginButton.hidden = Boolean(firebaseUser) || (googleDriveConnected && !googleDriveAuthorizationNeeded); cloudLoginButton.textContent = firebaseInitialized ? 'Conectează Google pentru sincronizare live' : (googleDriveConnected ? 'Reîmprospătează accesul Google Drive' : 'Conectează Google Drive'); }
         if (cloudSyncNowButton) cloudSyncNowButton.hidden = firebaseInitialized ? !firebaseUser : !googleDriveConnected;
@@ -4995,8 +5012,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           reads.push(ref.get());
         }
         const chunks = await Promise.all(reads);
-        const text = chunks.map((item) => item.exists ? String(item.data()?.data || '') : '').join('');
-        return text ? JSON.parse(text) : null;
+        if(!chunks.length||chunks.some(item=>!item.exists||typeof item.data()?.data!=='string'))throw new Error('SYNC_MISSING_CHUNK');
+        const text = chunks.map(item=>item.data().data).join('');
+        let record;try{record=JSON.parse(text);}catch{throw new Error('SYNC_INVALID_PROJECT');}
+        if(!record||record.id!==meta.id)throw new Error('SYNC_INVALID_PROJECT');
+        return record;
       }
 
       async function firebaseWriteTextChunks(collectionRef, text, getDocumentId, updatedAt = '') {
@@ -5442,22 +5462,26 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         }finally{database.close();}
       }
       async function firebaseReconcile(remote) {
-        if (!firebaseUser || !remote) return;
-        if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+        if (!firebaseUser || !remote) return false;
+        if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
         if (firebaseRunning) {
           firebasePendingRemote = remote;
-          return;
+          return false;
         }
+        const failedDownloads=new Set();let uploadFailed=false;
         firebaseRunning = true;
+        updateCloudAccountUi();
         firebaseLastRemoteUpdatedAt = remote.updatedAt || firebaseLastRemoteUpdatedAt;
         try {
           firebaseManifest = remote;
+          firebaseCloudProjectCount=Object.keys(remote.records||{}).length;
           const local = await readAllProjectRecords();
           const localMap = new Map(local.map((item) => [item.id, item]));
+          let firstDownloadShown=local.length>0;
           const protectedOfflineIds = await getPendingFirebaseRecordIds();
           const protectedDeletionIds = await getPendingFirebaseDeletionIds();
           for (const [id, deletedAt] of Object.entries(remote.tombstones || {})) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
             if (protectedOfflineIds.has(id)||firebaseProjectProtected(id)) continue;
             const localRecord = localMap.get(id);
             if (localRecord && (Date.parse(deletedAt) || 0) >= getRecordUpdatedAt(localRecord)) {
@@ -5466,7 +5490,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             }
           }
           for (const meta of Object.values(remote.records || {})) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
             if (protectedOfflineIds.has(meta.id) || protectedDeletionIds.has(meta.id) || firebaseProjectProtected(meta.id)) continue;
             const localRecord = localMap.get(meta.id);
             if (!localRecord || Date.parse(meta.updatedAt || '') > getRecordUpdatedAt(localRecord)) {
@@ -5476,32 +5500,40 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
                 projectManagerNeedsRefresh = true;
                 continue;
               }
-              const remoteRecord = await firebaseLoadRecord(meta);
-              if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
-              if (remoteRecord) {
+              try{
+                const remoteRecord = await firebaseLoadRecord(meta);
+                if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+                if(!remoteRecord)throw new Error('SYNC_MISSING_CHUNK');
                 if (localRecord && JSON.stringify(localRecord) !== JSON.stringify(remoteRecord)) {
                   await createProjectBackup(localRecord, 'firebase-merge-recovery');
                 }
-                await applyFirebaseRemote({record:remoteRecord});
-              }
+                const applied=await applyFirebaseRemote({record:remoteRecord});
+                if(applied&&!firstDownloadShown&&!isContinuousInteractionActive()&&!hasOpenWorkspaceEditor()&&!projectManagerView.hidden){firstDownloadShown=true;await renderProjectCards();}
+              }catch(error){failedDownloads.add(meta.id);noteFirebaseDownloadFailure(error);console.warn('Un proiect va fi descărcat din nou; celelalte continuă.',meta.id,error);}
             }
           }
           const refreshed = await readAllProjectRecords();
           for (const localRecord of refreshed) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return;}
-            if(firebaseProjectProtected(localRecord.id))continue;
+            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+            if(failedDownloads.has(localRecord.id)||firebaseProjectProtected(localRecord.id))continue;
             if (protectedOfflineIds.has(localRecord.id) || protectedDeletionIds.has(localRecord.id)) continue;
             const remoteMeta = remote.records?.[localRecord.id];
             const tombstoneAt = Date.parse(remote.tombstones?.[localRecord.id] || '') || 0;
             if (tombstoneAt > getRecordUpdatedAt(localRecord)) continue;
-            if (!remoteMeta || getRecordUpdatedAt(localRecord) > Date.parse(remoteMeta.updatedAt || '')) await firebaseUploadRecord(localRecord);
+            if (!remoteMeta || getRecordUpdatedAt(localRecord) > Date.parse(remoteMeta.updatedAt || '')){try{await firebaseUploadRecord(localRecord);}catch(error){uploadFailed=true;noteFirebaseSyncFailure(error);console.warn('Proiectul local rămâne păstrat; trimiterea va fi reîncercată.',localRecord.id,error);}}
           }
-          if(!hasOpenWorkspaceEditor()&&!projectManagerView.hidden)await renderProjectCards();else projectManagerNeedsRefresh=true;
-        } finally {
+          firebaseProjectsChecked=true;
+          firebaseCloudProjectCount=Object.keys(firebaseManifest?.records||remote.records||{}).length;
+          if(!failedDownloads.size)firebaseLastDownloadError='';
+          return !failedDownloads.size&&!uploadFailed;
+        }catch(error){noteFirebaseDownloadFailure(error);throw error;}
+        finally {
           firebaseRunning = false;
+          if(!isContinuousInteractionActive()&&!hasOpenWorkspaceEditor()&&!projectManagerView.hidden)await renderProjectCards();else projectManagerNeedsRefresh=true;
+          updateCloudAccountUi();
           const pendingRemote = firebasePendingRemote;
           firebasePendingRemote = null;
-          if (pendingRemote) Promise.resolve().then(() => firebaseReconcile(pendingRemote));
+          if (pendingRemote) Promise.resolve().then(() => firebaseReconcile(pendingRemote)).catch(noteFirebaseDownloadFailure);
         }
       }
       async function getPendingFirebaseRecordIds() {
@@ -5725,6 +5757,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           notifyInventoryCloudChange();
           await firebaseReconcile(snapshot.data() || { version: 1, records: {}, tombstones: {} });
         } catch (error) {
+          noteFirebaseDownloadFailure(error);
           console.warn('Reîmprospătarea live Firebase va fi reluată automat.', error);
         }
       }
@@ -5740,7 +5773,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 
       async function activateFirebaseUser(user) {
         firebaseUser = user || null;
-        clearFirebaseSyncFailure();
+        clearFirebaseSyncFailure();firebaseLastDownloadError='';firebaseProjectsChecked=false;firebaseCloudProjectCount=0;
         if (firebaseManifestUnsubscribe) { firebaseManifestUnsubscribe(); firebaseManifestUnsubscribe = null; }
         stopFirebaseRealtimeSignal();
         window.clearInterval(firebaseLiveRefreshTimer);
@@ -5766,7 +5799,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           }
           if (data.updatedAt && data.updatedAt === firebaseLastRemoteUpdatedAt) return;
           firebaseReconcile(data).catch((error) => console.warn('Actualizarea live Firebase a eșuat.', error));
-        }, (error) => console.warn('Conexiunea live Firebase a eșuat.', error));
+        }, (error) => {noteFirebaseDownloadFailure(error);console.warn('Conexiunea live Firebase a eșuat.', error);});
         startFirebaseLiveRefresh();
         startFirebaseManagerRefreshFallback();
         startFirebaseRealtimeSignal();
@@ -7261,7 +7294,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         projectEmptyState.hidden = filteredRecords.length > 0;
         if (!filteredRecords.length) {
           projectEmptyState.textContent = query ? 'Nu există rezultate pentru această căutare.' : selectedProjectStatusFilter === 'all'
-            ? 'Nu există proiecte încă. Creează un proiect nou sau importă un fișier existent.'
+            ? getEmptyProjectsMessage()
             : `Nu există proiecte marcate „${getProjectStatusFilterLabel(selectedProjectStatusFilter)}”.`;
           return;
         }
@@ -11893,7 +11926,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             const remoteRef = firebaseManifestRef || firebaseDb.collection(firebaseSyncCollection).doc(firebaseUser.uid).collection('state').doc('manifest');
             firebaseManifestRef = remoteRef;
             const remote = await remoteRef.get();
-            await firebaseReconcile(remote.data() || { version: 1, records: {}, tombstones: {} });
+            const received=await firebaseReconcile(remote.data() || { version: 1, records: {}, tombstones: {} });
+            if(received===false||firebaseSyncError())throw new Error('SYNC_PENDING');
           } else if (googleDriveConnected) {
             await googleDriveTokenFor(true);
             googleDriveAuthorizationNeeded = false;
@@ -11907,11 +11941,12 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           showSaveToast('Proiectele, notițele și inventarul sunt sincronizate.');
           closeCloudAccountDialog();
         } catch (error) {
+          if(firebaseUser&&error?.message!=='SYNC_PENDING')noteFirebaseDownloadFailure(error);
           googleDriveAuthorizationNeeded = googleDriveConnected;
           updateCloudAccountUi();
           cloudAccountStatus.textContent = error?.message === 'AUTH_REQUIRED'
             ? 'Conectarea Google nu este încă activă. Apasă „Conectează Google pentru sincronizare live”, alege contul Google și încearcă din nou.'
-            : (firebaseLastSyncError || 'Nu am putut sincroniza acum. Proiectele locale nu au fost modificate. Verifică internetul și încearcă din nou.');
+            : (firebaseSyncError() || 'Nu am putut sincroniza acum. Proiectele locale nu au fost modificate. Verifică internetul și încearcă din nou.');
           console.warn('Sincronizarea manuală a eșuat.', error);
         }
       });
