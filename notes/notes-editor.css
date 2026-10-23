@@ -3522,3 +3522,5 @@
 .an-alignment-guides i{position:absolute;display:block;background:#447fc4;box-shadow:0 0 0 calc(.5px / var(--an-zoom,1)) #ffffffb3}
 .an-alignment-guides .an-guide-x{top:0;bottom:0;width:calc(1px / var(--an-zoom,1));transform:translateX(-50%)}
 .an-alignment-guides .an-guide-y{left:0;right:0;height:calc(1px / var(--an-zoom,1));transform:translateY(-50%)}
+
+.an-capture-preview{display:block;width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#f2f6fa;border:1px solid #e0e8f0}

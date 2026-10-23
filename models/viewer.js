@@ -24,23 +24,23 @@ function dispose(root){
   root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);for(const m of (Array.isArray(o.material)?o.material:[o.material]))if(m){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});
   geometry.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());textures.forEach(x=>{x.source?.data?.close?.();x.dispose();});
 }
-export function openModels({models,onChange,getNotes,onNote}){
+export function openModels({models,onChange,getNotes,onNote,onCapture}){
   const previous=document.getElementById('atelierModels');if(previous)return;
   const opener=document.activeElement;
   const dialog=document.createElement('dialog');dialog.id='atelierModels';dialog.className='atelier-models';
   dialog.setAttribute('aria-labelledby','modelTitle');
-  dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2><p class="model-added" data-model-added hidden></p></div><div class="model-header-actions"><button type="button" data-note disabled>✎ Notează</button><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
+  dialog.innerHTML=`<header class="model-header"><div><span class="model-eyebrow">PROIECT · VIZUALIZARE</span><h2 id="modelTitle">Modele 3D</h2><p class="model-added" data-model-added hidden></p></div><div class="model-header-actions"><button type="button" data-capture disabled>Captură în notiță</button><button type="button" data-note disabled>✎ Notează</button><button type="button" data-add>＋ Adaugă model</button><button type="button" data-close aria-label="Închide modelele 3D">Închide</button></div></header>
   <div class="model-body"><aside class="model-side"><section><h3>În acest proiect</h3><div data-model-list></div></section><section data-note-section><h3>Notițe pe model</h3><div data-model-notes></div></section><section><h3>Tag-uri SketchUp</h3><p data-tag-help class="model-muted">Tag-urile apar după deschiderea unui model.</p><div data-tags></div></section><section class="model-source-info"><p class="model-muted">Copie pentru vizualizare · modelul original nu este editat</p><div data-dimension-help></div></section></aside>
   <section class="model-workspace" aria-label="Vizualizare model 3D"><div class="model-tools"><div class="model-tool-actions"><button type="button" data-fit disabled>Încadrează</button><button type="button" data-measure aria-pressed="false" disabled>Măsoară</button><button type="button" data-clear disabled>Șterge măsura</button><div class="model-visibility" role="group" aria-label="Piese ascunse"><button type="button" data-hide-part aria-label="Ascunde piesa selectată" disabled>Ascunde piesa</button><button type="button" data-unhide-last disabled>Arată ultima</button><button type="button" data-unhide-all disabled>Arată toate</button></div></div><section class="model-part" aria-live="polite" aria-label="Piesă și material"><div class="model-part-info"><h3>Piesă și material</h3><p data-part>Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.</p><span data-result aria-live="polite"></span></div><div data-dimensions hidden></div></section></div><div class="model-canvas"><div class="model-empty"><strong>Modelul proiectului, mereu la îndemână</strong><p>Alege un fișier SketchUp .skp sau un model .glb. Conversia SketchUp se face automat pe acest dispozitiv.</p><p>Rotire · Zoom · Tag-uri · Materiale · Măsurare</p></div><span data-distance class="model-distance" hidden></span></div></section></div>
   <footer class="model-footer"><p class="model-status" data-status role="status">Pe tabletă: un deget rotește; două degete mută și apropie modelul.</p><button type="button" data-remove disabled>Elimină modelul din proiect</button></footer><input type="file" accept=".skp,.glb" data-file hidden>`;
   document.body.append(dialog);dialog.showModal();
   const canvasHost=$(dialog,'.model-canvas'),status=$(dialog,'[data-status]'),fileInput=$(dialog,'[data-file]');
   let items=models.slice(),activeId=null,root=null,renderer=null,controls=null,camera=null,scene=null,environment=null,clipRadius=1,contextLost=false,closed=false,generation=0,busy=false,measure=false,points=[],markerGroup=null,selection=null,pointerStart=null;
-  let selectedPart=null;const hiddenParts=[];let conversion=null,sticky=null;const lifecycle=new AbortController();
+  let capturing=false;let selectedPart=null;const hiddenParts=[];let conversion=null,sticky=null;const lifecycle=new AbortController();
   const tags=new Map(),ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let snapPoint=createSnapper();
   const mm=value=>new Intl.NumberFormat('ro-RO',{maximumFractionDigits:1}).format(value);
-  $(dialog,'[data-note]').hidden=!onNote;$(dialog,'[data-note-section]').hidden=!getNotes;
+  $(dialog,'[data-capture]').hidden=!onCapture;$(dialog,'[data-note]').hidden=!onNote;$(dialog,'[data-note-section]').hidden=!getNotes;
   async function refreshNotes(){
     if(!getNotes||!activeId)return;const id=activeId,host=$(dialog,'[data-model-notes]');
     try{const notes=await getNotes(id);if(closed||id!==activeId)return;host.replaceChildren();
@@ -55,6 +55,17 @@ export function openModels({models,onChange,getNotes,onNote}){
     }catch(error){message('Bilețelul nu poate fi deschis: '+error.message);}
   }
   $(dialog,'[data-note]').onclick=()=>startNote();
+  $(dialog,'[data-capture]').onclick=async()=>{
+    if(!onCapture||capturing||busy||!root||contextLost)return;
+    capturing=true;list();$(dialog,'[data-capture]').disabled=true;const model=items.find(m=>m.id===activeId),background=scene.background,selectedVisible=selection?.visible,markersVisible=markerGroup?.visible;
+    try{
+      if(selection)selection.visible=false;if(markerGroup)markerGroup.visible=false;scene.background=new THREE.Color('#f4f7fa');render();
+      const blob=await new Promise((resolve,reject)=>renderer.domElement.toBlob(b=>b?resolve(b):reject(Error('Captura nu a putut fi creată.')),'image/png'));
+      scene.background=background;if(selection)selection.visible=selectedVisible;if(markerGroup)markerGroup.visible=markersVisible;render();
+      if(closed)return;const note=await onCapture({blob,model:{id:model.id,name:model.name}});if(note&&!closed)message('Captură adăugată în notița „'+note.title+'”, pe o pagină nouă.');
+    }catch(error){if(!closed)message('Captura nu a fost adăugată: '+error.message);}
+    finally{if(!closed){scene.background=background;if(selection)selection.visible=selectedVisible;if(markerGroup)markerGroup.visible=markersVisible;render();}capturing=false;if(!closed)list();}
+  };
   async function convertSketchUp(file){
     const buffer=await file.arrayBuffer();if(closed)throw Error('Conversie anulată.');
     return new Promise((resolve,reject)=>{
@@ -88,8 +99,8 @@ export function openModels({models,onChange,getNotes,onNote}){
     if(renderer)return;
     renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.5:2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1.1;
     renderer.domElement.setAttribute('aria-label','Model 3D: trage pentru rotire, folosește două degete pentru zoom și deplasare');
-    renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;if(controls)controls.enabled=false;message('Se reface vizualizarea 3D… Modelul rămâne deschis.');});
-    renderer.domElement.addEventListener('webglcontextrestored',()=>{if(closed)return;requestAnimationFrame(()=>{if(closed)return;contextLost=false;rebuildEnvironment();controls.enabled=true;render();message('Vizualizarea 3D a fost refăcută. Poți continua.');});});
+    renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;$(dialog,'[data-capture]').disabled=true;if(controls)controls.enabled=false;message('Se reface vizualizarea 3D… Modelul rămâne deschis.');});
+    renderer.domElement.addEventListener('webglcontextrestored',()=>{if(closed)return;requestAnimationFrame(()=>{if(closed)return;contextLost=false;rebuildEnvironment();controls.enabled=true;render();list();message('Vizualizarea 3D a fost refăcută. Poți continua.');});});
     canvasHost.prepend(renderer.domElement);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.001,10000);
     // Neutral studio illumination is generated locally once; no HDR download,
     // material recolouring, shadow passes or continuous animation are needed.
@@ -114,12 +125,12 @@ export function openModels({models,onChange,getNotes,onNote}){
     const added=$(dialog,'[data-model-added]'),active=items.find(model=>model.id===activeId);added.replaceChildren();added.hidden=!active;
     if(active){const date=new Date(active.createdAt||'');if(Number.isFinite(date.getTime())){const time=document.createElement('time');time.dateTime=date.toISOString();time.textContent=new Intl.DateTimeFormat('ro-RO',{dateStyle:'short',timeStyle:'short'}).format(date);added.append('Adăugat în proiect: ',time);}else added.textContent='Data adăugării nu este disponibilă.';}
     if(!items.length){const p=document.createElement('p');p.className='model-muted';p.textContent='Niciun model adăugat.';host.append(p);}
-    for(const model of items){const b=document.createElement('button');b.type='button';b.className='model-entry';b.textContent=model.name;b.title=model.name;b.setAttribute('aria-pressed',String(model.id===activeId));b.disabled=busy;b.onclick=()=>load(model);host.append(b);}
-    $(dialog,'[data-add]').disabled=busy;$(dialog,'[data-remove]').disabled=busy||!activeId;
+    for(const model of items){const b=document.createElement('button');b.type='button';b.className='model-entry';b.textContent=model.name;b.title=model.name;b.setAttribute('aria-pressed',String(model.id===activeId));b.disabled=busy||capturing;b.onclick=()=>load(model);host.append(b);}
+    $(dialog,'[data-note]').disabled=busy||capturing||!root||!onNote;$(dialog,'[data-capture]').disabled=busy||capturing||!root||contextLost;$(dialog,'[data-add]').disabled=busy||capturing;$(dialog,'[data-remove]').disabled=busy||!activeId;
   }
   function clearMeasurement(){points=[];if(markerGroup){scene.remove(markerGroup);dispose(markerGroup);markerGroup=null;}$(dialog,'[data-result]').textContent='';$(dialog,'[data-distance]').hidden=true;$(dialog,'[data-clear]').disabled=true;render();}
   function clearSelection(){selectedPart=null;$(dialog,'[data-hide-part]').disabled=true;if(selection){scene.remove(selection);dispose(selection);selection=null;}$(dialog,'[data-dimensions]').hidden=true;$(dialog,'[data-dimension-help]').replaceChildren();$(dialog,'[data-part]').textContent='Atinge o piesă pentru material și dimensiuni.';$(dialog,'[data-part]').title='Atinge o piesă cu degetul sau Apple Pencil pentru material și dimensiuni.';}
-  function reset(){hiddenParts.length=0;updateVisibilityButtons();clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-note]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
+  function reset(){hiddenParts.length=0;updateVisibilityButtons();clearMeasurement();clearSelection();if(root){scene.remove(root);dispose(root);root=null;}tags.clear();$(dialog,'[data-tags]').replaceChildren();$(dialog,'[data-capture]').disabled=true;$(dialog,'[data-fit]').disabled=true;$(dialog,'[data-note]').disabled=true;$(dialog,'[data-measure]').disabled=true;measure=false;$(dialog,'[data-measure]').setAttribute('aria-pressed','false');}
   function fit(focus=false){
     if(!root)return;root.updateMatrixWorld(true);const box=new THREE.Box3();
     root.traverse(o=>{if(o.isMesh&&visible(o)){o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
@@ -180,11 +191,11 @@ export function openModels({models,onChange,getNotes,onNote}){
     camera.near=Math.max(distance/10000,.00001);camera.far=Math.max(distance*100,100);camera.updateProjectionMatrix();controls.update();fit(true);
   }
   async function load(model){
-    if(busy||closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}busy=true;const token=++generation;list();message('Se deschide modelul…');
+    if(busy||capturing||closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}busy=true;const token=++generation;list();message('Se deschide modelul…');
     try{
       const response=await fetch(model.dataUrl);const buffer=await response.arrayBuffer();
       if(buffer.byteLength>MAX_BYTES)throw Error('Modelul depășește limita de 25 MB.');
-      init();const next=await parse(buffer);
+      init();reset();activeId=null;$(dialog,'.model-empty').hidden=false;const next=await parse(buffer);
       if(closed||token!==generation){dispose(next);return;}
       reset();snapPoint=createSnapper();root=next;scene.add(root);prepareAppearance();activeId=model.id;$(dialog,'.model-empty').hidden=true;tagPanel();resize();initialView();$(dialog,'[data-fit]').disabled=false;$(dialog,'[data-note]').disabled=!onNote;refreshNotes();
       let scaled=false;root.traverse(o=>{if(o.userData.atelierModel===1&&o.userData.measurementUnits==='mm')scaled=true;});
