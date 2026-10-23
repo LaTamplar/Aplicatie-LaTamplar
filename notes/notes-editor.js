@@ -285,6 +285,32 @@
   class ImageAlignment {
     constructor(editor){this.e=editor;this.node=el('div','an-alignment-guides');this.node.setAttribute('aria-hidden','true');this.lines={x:el('i','an-guide-x'),y:el('i','an-guide-y')};this.node.append(this.lines.x,this.lines.y);editor.sheet.append(this.node);this.clear();}
     clear(){this.node.hidden=true;this.lines.x.hidden=this.lines.y.hidden=true;}
+    resize(before,rawScale,gesture){
+      const [w,h]=size(this.e.page),a=before.rotation*Math.PI/180;
+      const sx=gesture.handle.includes('w')?-1:1,sy=gesture.handle.includes('n')?-1:1;
+      const vx=sx*before.w/2*Math.cos(a)-sy*before.h/2*Math.sin(a);
+      const vy=sx*before.w/2*Math.sin(a)+sy*before.h/2*Math.cos(a);
+      const hx=(Math.abs(before.w*Math.cos(a))+Math.abs(before.h*Math.sin(a)))/2;
+      const hy=(Math.abs(before.w*Math.sin(a))+Math.abs(before.h*Math.cos(a)))/2;
+      const anchorX=before.x+before.w/2-vx,anchorY=before.y+before.h/2-vy;
+      const minimum=Math.max(42/before.w,24/before.h),travel=Math.hypot(before.w,before.h)*this.e.zoom,candidates=[];
+      // Every visible edge is anchor + scale * coefficient. Solve its exact
+      // meeting with a page edge, keeping both the ratio and opposite corner.
+      for(const [key,length,anchor,vector,half] of [['x',w,anchorX,vx,hx],['y',h,anchorY,vy,hy]]){
+        for(const sign of [-1,1]){const coefficient=vector+sign*half;if(Math.abs(coefficient)<1e-7)continue;
+          for(const target of [0,length,length/2]){const scale=(target-anchor)/coefficient;if(Number.isFinite(scale)&&scale>=minimum)candidates.push({key,target,scale});}
+        }
+      }
+      let snap=gesture.resizeAlignment;
+      if(snap&&Math.abs(rawScale-snap.scale)*travel>14)snap=null;
+      if(!snap){snap=candidates.reduce((best,item)=>!best||Math.abs(item.scale-rawScale)<Math.abs(best.scale-rawScale)?item:best,null);if(snap&&Math.abs(rawScale-snap.scale)*travel>8)snap=null;}
+      gesture.resizeAlignment=snap;this.clear();if(!snap)return rawScale;
+      for(const key of ['x','y']){
+        const match=snap.key===key?snap:candidates.find(item=>item.key===key&&Math.abs(item.scale-snap.scale)*travel<.01);
+        if(match){this.lines[key].hidden=false;this.lines[key].style[key==='x'?'left':'top']=match.target+'px';}
+      }
+      this.node.hidden=false;return snap.scale;
+    }
     move(o,x,y,gesture){
       const [w,h]=size(this.e.page),angle=o.rotation*Math.PI/180;
       const halfX=(Math.abs(o.w*Math.cos(angle))+Math.abs(o.h*Math.sin(angle)))/2;
@@ -662,7 +688,7 @@
       if(g.kind==='erase'){this.erase(p);return;}
       if(g.kind==='draw'){const batch=event.getCoalescedEvents?.()||[event];this.appendDrawingSamples(batch.length?batch:[event]);return;}
       if(g.kind==='shape'&&this.preview){this.preview.x=Math.min(g.start.x,p.x);this.preview.y=Math.min(g.start.y,p.y);this.preview.w=Math.max(2,Math.abs(p.x-g.start.x));this.preview.h=Math.max(2,Math.abs(p.y-g.start.y));this.requestPaint();return;}
-      if(g.moved&&g.o){const o=g.o,b=g.before,[w,h]=size(this.page);if(g.kind==='move'){const x=clamp(b.x+dx,-o.w+20,w-20),y=clamp(b.y+dy,-o.h+20,h-20);if(o.type==='image')this.alignment.move(o,x,y,g);else{o.x=x;o.y=y;}}else if(g.kind==='rotate'){const cx=b.x+b.w/2,cy=b.y+b.h/2,startAngle=Math.atan2(g.start.y-cy,g.start.x-cx)*180/Math.PI,currentAngle=Math.atan2(p.y-cy,p.x-cx)*180/Math.PI,raw=normalizeAngle(b.rotation+normalizeAngle(currentAngle-startAngle)),nearest=normalizeAngle(Math.round(raw/15)*15),strong=normalizeAngle(Math.round(raw/45)*45),strongDistance=Math.abs(normalizeAngle(raw-strong)),fineDistance=Math.abs(normalizeAngle(raw-nearest)),snapped=strongDistance<=6?strong:fineDistance<=3.5?nearest:null;o.rotation=snapped===null?raw:snapped;if(snapped!==null&&g.snapAngle!==snapped){g.snapAngle=snapped;this.selection.node.classList.remove('did-snap');void this.selection.node.offsetWidth;this.selection.node.classList.add('did-snap');navigator.vibrate?.(8);}else if(snapped===null)g.snapAngle=null;this.selection.showRotation(o.rotation,snapped!==null);}else if(g.kind==='resize'){const a=b.rotation*Math.PI/180,lx=dx*Math.cos(a)+dy*Math.sin(a),ly=-dx*Math.sin(a)+dy*Math.cos(a),left=g.handle.includes('w'),top=g.handle.includes('n');const horizontal=/[we]/.test(g.handle),vertical=/[ns]/.test(g.handle);let nw=horizontal?Math.max(42,b.w+(left?-lx:lx)):b.w,nh=vertical?Math.max(24,b.h+(top?-ly:ly)):b.h;if(o.type==='image'){const scale=Math.max(nw/b.w,nh/b.h);nw=b.w*scale;nh=b.h*scale;}else if(o.type==='text'){const scale=clamp(horizontal?nw/b.w:nh/b.h,.3,6);nw=b.w*scale;nh=b.h*scale;o.fontSize=clamp(b.fontSize*scale,8,144);o.runs=(b.runs||[]).map(run=>{const next=copy(run);if(Number.isFinite(next.style?.fontSize))next.style.fontSize=clamp(next.style.fontSize*scale,8,144);return next;});}const cx=(left?-1:1)*(nw-b.w)/2,cy=(top?-1:1)*(nh-b.h)/2;o.x=b.x+(b.w-nw)/2+cx*Math.cos(a)-cy*Math.sin(a);o.y=b.y+(b.h-nh)/2+cx*Math.sin(a)+cy*Math.cos(a);o.w=nw;o.h=nh;if(o.type==='text'){const scaledHeight=o.h;TextObject.fit(o,o.w);o.h=Math.max(scaledHeight,o.h);}}this.selection.render();this.requestPaint();}
+      if(g.moved&&g.o){const o=g.o,b=g.before,[w,h]=size(this.page);if(g.kind==='move'){const x=clamp(b.x+dx,-o.w+20,w-20),y=clamp(b.y+dy,-o.h+20,h-20);if(o.type==='image')this.alignment.move(o,x,y,g);else{o.x=x;o.y=y;}}else if(g.kind==='rotate'){const cx=b.x+b.w/2,cy=b.y+b.h/2,startAngle=Math.atan2(g.start.y-cy,g.start.x-cx)*180/Math.PI,currentAngle=Math.atan2(p.y-cy,p.x-cx)*180/Math.PI,raw=normalizeAngle(b.rotation+normalizeAngle(currentAngle-startAngle)),nearest=normalizeAngle(Math.round(raw/15)*15),strong=normalizeAngle(Math.round(raw/45)*45),strongDistance=Math.abs(normalizeAngle(raw-strong)),fineDistance=Math.abs(normalizeAngle(raw-nearest)),snapped=strongDistance<=6?strong:fineDistance<=3.5?nearest:null;o.rotation=snapped===null?raw:snapped;if(snapped!==null&&g.snapAngle!==snapped){g.snapAngle=snapped;this.selection.node.classList.remove('did-snap');void this.selection.node.offsetWidth;this.selection.node.classList.add('did-snap');navigator.vibrate?.(8);}else if(snapped===null)g.snapAngle=null;this.selection.showRotation(o.rotation,snapped!==null);}else if(g.kind==='resize'){const a=b.rotation*Math.PI/180,lx=dx*Math.cos(a)+dy*Math.sin(a),ly=-dx*Math.sin(a)+dy*Math.cos(a),left=g.handle.includes('w'),top=g.handle.includes('n');const horizontal=/[we]/.test(g.handle),vertical=/[ns]/.test(g.handle);let nw=horizontal?Math.max(42,b.w+(left?-lx:lx)):b.w,nh=vertical?Math.max(24,b.h+(top?-ly:ly)):b.h;if(o.type==='image'){const scale=this.alignment.resize(b,Math.max(nw/b.w,nh/b.h),g);nw=b.w*scale;nh=b.h*scale;}else if(o.type==='text'){const scale=clamp(horizontal?nw/b.w:nh/b.h,.3,6);nw=b.w*scale;nh=b.h*scale;o.fontSize=clamp(b.fontSize*scale,8,144);o.runs=(b.runs||[]).map(run=>{const next=copy(run);if(Number.isFinite(next.style?.fontSize))next.style.fontSize=clamp(next.style.fontSize*scale,8,144);return next;});}const cx=(left?-1:1)*(nw-b.w)/2,cy=(top?-1:1)*(nh-b.h)/2;o.x=b.x+(b.w-nw)/2+cx*Math.cos(a)-cy*Math.sin(a);o.y=b.y+(b.h-nh)/2+cx*Math.sin(a)+cy*Math.cos(a);o.w=nw;o.h=nh;if(o.type==='text'){const scaledHeight=o.h;TextObject.fit(o,o.w);o.h=Math.max(scaledHeight,o.h);}}this.selection.render();this.requestPaint();}
     }
     up(event,cancel=false){
       this.pointers.delete(event.pointerId);const g=this.gesture;if(!g)return;if(g.kind==='pinch'){if(!this.pointers.size){this.gesture=null;if(this.resizePending)this.preserveDocumentPositionOnResize();}return;}if(g.id!==event.pointerId)return;if(g.kind==='draw'&&!cancel){const finalBatch=event.getCoalescedEvents?.()||[];this.appendDrawingSamples(finalBatch.length?finalBatch:[event]);}this.gesture=null;this.textPlacement?.remove();this.textPlacement=null;
