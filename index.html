@@ -4282,7 +4282,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   <main class="app">
     <header>
       <div class="editor-project-block" aria-live="polite">
-        <p class="editor-project-label">📁 Proiect:</p>
+        <p class="editor-project-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3V7Z"/></svg>Proiect</p>
         <h1 id="editorProjectName" class="editor-project-name">Proiect nou</h1>
         <p id="editorProjectMeta" class="editor-project-meta" hidden>Ultima modificare: -</p>
       </div>
@@ -4442,7 +4442,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       </section>
 
       <section class="notes" id="notesPanel" aria-labelledby="notesLabel" hidden>
-        <label class="section-label notes-title" id="notesLabel">📝 Notițe interactive</label>
+        <label class="section-label notes-title" id="notesLabel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H5V3h1ZM14 3v5h5M8 12h8M8 16h6"/></svg><span>Notițe interactive</span></label>
         <div class="notes-toolbar">
           <button class="ui-action ui-action-primary" type="button" id="addNote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span>Adaugă notă</span></button>
           <button class="ui-action ui-action-danger" type="button" id="deleteSelectedNote" aria-label="Șterge nota" title="Șterge nota" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path></svg><span>Șterge nota</span></button>
@@ -4798,7 +4798,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.27.0';
+      const APP_VERSION = '1.27.1';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -13544,6 +13544,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 #projectManagerView#projectManagerView #workspaceInventory[data-inventory-view=folders] .workspace-inventory-heading{grid-template-areas:"icon copy actions"!important}
 </style>
 <link rel="stylesheet" href="./workspace-polish.css?v=1.26.7">
+<link rel="stylesheet" href="./project-editor.css?v=1.27.1">
 <link rel="stylesheet" href="./app-safe-area.css?v=1.26.7">
 </body>
 </html>
