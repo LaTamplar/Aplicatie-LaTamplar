@@ -967,7 +967,7 @@
       return new Promise(resolve=>{let saved=null;const d=dialog('Captură model 3D',content,async()=>{
         if(!choice.value)throw Error('Alege o notiță.');
         const image=await ImageObject.fromFile(new File([blob],'model.png',{type:'image/png'})),page=pageData(image.w>image.h?'landscape':'portrait','blank'),[w,h]=size(page),ratio=image.w/image.h;
-        image.w=Math.min(w-72,(h-72)*ratio);image.h=image.w/ratio;image.x=(w-image.w)/2;image.y=(h-image.h)/2;image.source='model-capture';image.modelId=model.id;page.title=model.name.slice(0,60);page.objects.push(image);
+        image.w=Math.min(w,h*ratio);image.h=image.w/ratio;image.x=(w-image.w)/2;image.y=(h-image.h)/2;image.source='model-capture';image.modelId=model.id;page.title=model.name.slice(0,60);page.objects.push(image);
         if(this.editor?.note.id===choice.value)await this.editor.flush();
         saved=await this.store.appendPage(choice.value,page);if(this.editor?.note.id===saved.id)this.editor.replaceRemoteNote(saved);this.suspendPreviews(true);
       },'Adaugă în notiță');d.querySelector('[type=submit]').disabled=!notes.length;d.addEventListener('close',()=>{URL.revokeObjectURL(url);preview.removeAttribute('src');resolve(saved);},{once:true});});
