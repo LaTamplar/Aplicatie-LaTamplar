@@ -81,7 +81,7 @@ export function openModels({models,onChange,getNotes,onNote,onCapture}){
   }
   function message(text){status.textContent=text;}
   function render(){
-    if(closed||contextLost||!renderer||!camera)return;
+    if(closed||document.hidden||contextLost||!renderer||!camera)return;
     // Keep useful depth precision on close, nearly coplanar cabinet surfaces.
     const distance=camera.position.distanceTo(controls.target),near=Math.max(1e-10,Math.min(distance*.005,clipRadius*.01)),far=Math.max(10,clipRadius*8,distance+clipRadius*4);
     if(camera.near!==near||camera.far!==far){camera.near=near;camera.far=far;camera.updateProjectionMatrix();}
@@ -194,6 +194,7 @@ export function openModels({models,onChange,getNotes,onNote,onCapture}){
     if(busy||capturing||closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}busy=true;const token=++generation;list();message('Se deschide modelul…');
     try{
       const response=await fetch(model.dataUrl);const buffer=await response.arrayBuffer();
+      if(closed||token!==generation)return;
       if(buffer.byteLength>MAX_BYTES)throw Error('Modelul depășește limita de 25 MB.');
       init();reset();activeId=null;$(dialog,'.model-empty').hidden=false;const next=await parse(buffer);
       if(closed||token!==generation){dispose(next);return;}
@@ -259,6 +260,6 @@ export function openModels({models,onChange,getNotes,onNote,onCapture}){
     busy=true;list();try{const next=items.filter(x=>x.id!==activeId);await onChange(next);if(closed)return;items=next;reset();activeId=null;$(dialog,'.model-empty').hidden=false;busy=false;if(items.length)await load(items[0]);else message('Modelul a fost eliminat din proiect.');}catch(error){message('Nu am putut salva modificarea: '+error.message);}finally{busy=false;if(!closed)list();}
   };
   const observer=new ResizeObserver(resize);observer.observe(canvasHost);
-  async function close(){if(closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}closed=true;lifecycle.abort();conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.dispose();renderer?.forceContextLoss();dialog.close();dialog.remove();opener?.focus();window.dispatchEvent(new CustomEvent('atelier-editor-idle'));}
-  $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();if(sticky)sticky.close().catch(error=>message(error.message));else close();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&!closed)sticky?.flush().catch(error=>message(error.message));},{signal:lifecycle.signal});list();if(items.length)load(items[0]);
+  async function close(){if(closed)return;if(sticky){try{await sticky.close();}catch(error){message(error.message);return;}}closed=true;lifecycle.abort();conversion?.cancel();generation++;observer.disconnect();controls?.dispose();if(root)dispose(root);dispose(markerGroup);dispose(selection);environment?.dispose();renderer?.setAnimationLoop(null);renderer?.renderLists?.dispose();renderer?.dispose();renderer?.forceContextLoss();if(renderer)renderer.domElement.width=renderer.domElement.height=1;scene?.clear();root=null;markerGroup=null;selection=null;environment=null;items=[];controls=null;camera=null;scene=null;renderer=null;dialog.close();dialog.remove();opener?.focus();window.dispatchEvent(new CustomEvent('atelier-editor-idle'));}
+  $(dialog,'[data-close]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();if(sticky)sticky.close().catch(error=>message(error.message));else close();});document.addEventListener('visibilitychange',()=>{if(closed)return;if(document.hidden)sticky?.flush().catch(error=>message(error.message));else{resize();render();}},{signal:lifecycle.signal});list();if(items.length)load(items[0]);
 }

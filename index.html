@@ -4517,7 +4517,6 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 
   <script>
     (() => {
@@ -4799,7 +4798,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.13';
+      const APP_VERSION = '1.26.14';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -5456,10 +5455,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 
       let firebaseReconcileIdleTimer;
       function deferFirebaseReconcile(remote){
-        firebasePendingRemote=remote;clearTimeout(firebaseReconcileIdleTimer);
+        firebasePendingRemote=remote;clearTimeout(firebaseReconcileIdleTimer);if(document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive())return;
         firebaseReconcileIdleTimer=setTimeout(()=>{if(firebaseRunning)return;const pending=firebasePendingRemote;firebasePendingRemote=null;if(pending)firebaseReconcile(pending).catch(()=>{});},10000);
       }
-      window.addEventListener('atelier-editor-idle',()=>{if(hasOpenWorkspaceEditor()||document.hidden)return;const pending=firebasePendingRemote;firebasePendingRemote=null;clearTimeout(firebaseReconcileIdleTimer);if(pending)firebaseReconcile(pending).catch(noteFirebaseDownloadFailure);else firebaseRefreshFromCloud();});
+      async function resumeProjectCloudWork(){if(hasOpenWorkspaceEditor()||isNotesWorkspaceActive()||document.hidden)return;await resumePendingFirebaseSync({reloadQueue:true});const pending=firebasePendingRemote;firebasePendingRemote=null;clearTimeout(firebaseReconcileIdleTimer);if(pending)firebaseReconcile(pending).catch(noteFirebaseDownloadFailure);else firebaseRefreshFromCloud();}
+      for(const event of ['atelier-editor-idle','atelier-notes-inactive'])window.addEventListener(event,()=>resumeProjectCloudWork().catch(noteFirebaseSyncFailure));
       function firebaseProjectProtected(id){return id===activeProjectId&&(projectDirty||hasOpenWorkspaceEditor()||isContinuousInteractionActive());}
       async function applyFirebaseRemote({record,id=record?.id,deletedAt}){
         const database=await openDatabase();try{
@@ -5473,7 +5473,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
       async function firebaseReconcile(remote) {
         if (!firebaseUser || !remote) return false;
-        if(hasOpenWorkspaceEditor()||document.hidden||isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+        if(hasOpenWorkspaceEditor()||isNotesWorkspaceActive()||document.hidden||isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
         if (firebaseRunning) {
           firebasePendingRemote = remote;
           return false;
@@ -5485,7 +5485,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         try {
           firebaseManifest = remote;
           firebaseCloudProjectCount=Object.keys(remote.records||{}).length;
-          const local = await readAllProjectRecords();
+          const local = await readProjectSummaries();
           const localMap = new Map(local.map((item) => [item.id, item]));
           let firstDownloadShown=local.length>0;
           const protectedOfflineIds = await getPendingFirebaseRecordIds();
@@ -5495,7 +5495,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             if (protectedOfflineIds.has(id)||firebaseProjectProtected(id)) continue;
             const localRecord = localMap.get(id);
             if (localRecord && (Date.parse(deletedAt) || 0) >= getRecordUpdatedAt(localRecord)) {
-              await createProjectBackup(localRecord, 'firebase-delete-recovery');
+              const full=await readProjectRecord(id);if(full)await createProjectBackup(full, 'firebase-delete-recovery');
               await applyFirebaseRemote({id,deletedAt});
             }
           }
@@ -5514,15 +5514,15 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
                 const remoteRecord = await firebaseLoadRecord(meta);
                 if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
                 if(!remoteRecord)throw new Error('SYNC_MISSING_CHUNK');
-                if (localRecord && JSON.stringify(localRecord) !== JSON.stringify(remoteRecord)) {
-                  await createProjectBackup(localRecord, 'firebase-merge-recovery');
+                if (localRecord) {
+                  const full=await readProjectRecord(meta.id);if(full&&JSON.stringify(full)!==JSON.stringify(remoteRecord))await createProjectBackup(full, 'firebase-merge-recovery');
                 }
                 const applied=await applyFirebaseRemote({record:remoteRecord});
                 if(applied&&!firstDownloadShown&&!isContinuousInteractionActive()&&!hasOpenWorkspaceEditor()&&!projectManagerView.hidden){firstDownloadShown=true;await renderProjectCards();}
               }catch(error){failedDownloads.add(meta.id);noteFirebaseDownloadFailure(error);console.warn('Un proiect va fi descărcat din nou; celelalte continuă.',meta.id,error);}
             }
           }
-          const refreshed = await readAllProjectRecords();
+          const refreshed = await readProjectSummaries();
           for (const localRecord of refreshed) {
             if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
             if(failedDownloads.has(localRecord.id)||firebaseProjectProtected(localRecord.id))continue;
@@ -5530,7 +5530,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             const remoteMeta = remote.records?.[localRecord.id];
             const tombstoneAt = Date.parse(remote.tombstones?.[localRecord.id] || '') || 0;
             if (tombstoneAt > getRecordUpdatedAt(localRecord)) continue;
-            if (!remoteMeta || getRecordUpdatedAt(localRecord) > Date.parse(remoteMeta.updatedAt || '')){try{await firebaseUploadRecord(localRecord);}catch(error){uploadFailed=true;noteFirebaseSyncFailure(error);console.warn('Proiectul local rămâne păstrat; trimiterea va fi reîncercată.',localRecord.id,error);}}
+            if (!remoteMeta || getRecordUpdatedAt(localRecord) > Date.parse(remoteMeta.updatedAt || '')){try{const full=await readProjectRecord(localRecord.id);if(full)await firebaseUploadRecord(full);}catch(error){uploadFailed=true;noteFirebaseSyncFailure(error);console.warn('Proiectul local rămâne păstrat; trimiterea va fi reîncercată.',localRecord.id,error);}}
           }
           firebaseProjectsChecked=true;
           firebaseCloudProjectCount=Object.keys(firebaseManifest?.records||remote.records||{}).length;
@@ -5559,8 +5559,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       async function loadPersistentFirebaseQueue() {
         const pending = (await getMetaValue(firebasePendingRecordsMetaKey)) || {};
         for (const projectId of Object.keys(pending)) {
-          const record = await readProjectRecord(projectId);
-          if (record) pendingFirebaseRecords.set(projectId, cloneProjectData(record));
+          if(pendingFirebaseRecords.get(projectId)?.updatedAt!==pending[projectId])pendingFirebaseRecords.set(projectId, {id:projectId,updatedAt:pending[projectId]});
         }
         const pendingDeletes = (await getMetaValue(firebasePendingDeletesMetaKey)) || {};
         firebasePendingDeletionCount = Object.keys(pendingDeletes).length;
@@ -5592,8 +5591,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         }
       }
 
-      async function flushPendingFirebaseRecords() {
+      async function flushPendingFirebaseRecords({allowWorkspace=false}={}) {
         if (!firebaseUser || !firebaseDb || navigator.onLine === false || firebaseSyncInProgress) return false;
+        if(!allowWorkspace&&(document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive()))return false;
         if(isContinuousInteractionActive()){clearTimeout(firebaseSyncTimer);firebaseSyncTimer=setTimeout(()=>flushPendingFirebaseRecords(),10000);return false;}
         firebaseSyncInProgress = true;
         updateCloudAccountUi();
@@ -5602,19 +5602,21 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         try {
           await loadPersistentFirebaseQueue();
           if (!(await flushPendingFirebaseDeletions())) completed = false;
-          for (const [projectId, record] of Array.from(pendingFirebaseRecords.entries())) {
-            if(isContinuousInteractionActive()){completed=false;break;}
+          for (const [projectId, marker] of Array.from(pendingFirebaseRecords.entries())) {
+            if(isContinuousInteractionActive()||!allowWorkspace&&(document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive())){completed=false;break;}
             try {
+              const record=await readProjectRecord(projectId);
+              if(!record){pendingFirebaseRecords.delete(projectId);continue;}
               const uploaded = await firebaseUploadRecord(record);
               // Un proiect mai vechi decât copia din cloud nu trebuie să oprească
               // restul cozii. Înainte, un singur astfel de proiect ținea afișat
               // „Se sincronizează” la nesfârșit și bloca proiectele noi.
               const cleared = await removePersistentFirebaseQueueItem(projectId, record);
-              if (cleared && JSON.stringify(pendingFirebaseRecords.get(projectId)) === JSON.stringify(record)) {
+              if (cleared && pendingFirebaseRecords.get(projectId) === marker) {
                 pendingFirebaseRecords.delete(projectId);
               } else if (!cleared) {
                 const latest = await readProjectRecord(projectId);
-                if (latest) pendingFirebaseRecords.set(projectId, cloneProjectData(latest));
+                if (latest) pendingFirebaseRecords.set(projectId, {id:projectId,updatedAt:latest.updatedAt});
                 else pendingFirebaseRecords.delete(projectId);
               }
               if (uploaded === false) shouldRefreshFromCloud = true;
@@ -5637,7 +5639,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         } finally {
           firebaseSyncInProgress = false;
           updateCloudAccountUi();
-          if (pendingFirebaseRecords.size && navigator.onLine !== false) {
+          if (pendingFirebaseRecords.size && navigator.onLine !== false && !document.hidden && !hasOpenWorkspaceEditor() && !isNotesWorkspaceActive()) {
             window.clearTimeout(firebaseSyncTimer);
             firebaseSyncTimer = window.setTimeout(() => flushPendingFirebaseRecords(), 5000);
           }
@@ -5647,7 +5649,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 
       function scheduleFirebaseSync(record) {
         if (!record?.id) return;
-        pendingFirebaseRecords.set(record.id, cloneProjectData(record));
+        pendingFirebaseRecords.set(record.id, {id:record.id,updatedAt:record.updatedAt});
         updateCloudAccountUi();
         window.clearTimeout(firebaseSyncTimer);
         firebaseSyncTimer = window.setTimeout(() => flushPendingFirebaseRecords(), 750);
@@ -5655,7 +5657,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       async function resumePendingFirebaseSync({ reloadQueue = false } = {}) {
         if (!firebaseUser || !firebaseDb) return;
         if (reloadQueue) await loadPersistentFirebaseQueue();
-        if (navigator.onLine === false) return;
+        if (navigator.onLine === false || document.hidden || hasOpenWorkspaceEditor() || isNotesWorkspaceActive()) return;
         await flushPendingFirebaseDeletions();
         await flushPendingFirebaseRecords();
       }
@@ -5716,7 +5718,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
       function startFirebaseManagerRefreshFallback() {
         window.clearInterval(firebaseManagerRefreshTimer);
-        firebaseManagerRefreshTimer = window.setInterval(refreshProjectManagerFromFirebaseFallback, 5000);
+        firebaseManagerRefreshTimer = window.setInterval(refreshProjectManagerFromFirebaseFallback, 30000);
       }
 
       async function firebaseBroadcastRealtimeSignal() {
@@ -5759,7 +5761,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
 
       async function firebaseRefreshFromCloud() {
-        if (!firebaseUser || !firebaseDb || firebaseRunning || hasOpenWorkspaceEditor() || document.hidden) return;
+        if (!firebaseUser || !firebaseDb || firebaseRunning || hasOpenWorkspaceEditor() || isNotesWorkspaceActive() || document.hidden) return;
         try {
           const remoteRef = firebaseManifestRef || firebaseDb.collection(firebaseSyncCollection).doc(firebaseUser.uid).collection('state').doc('manifest');
           firebaseManifestRef = remoteRef;
@@ -5774,11 +5776,11 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       function startFirebaseLiveRefresh() {
         window.clearInterval(firebaseLiveRefreshTimer);
         firebaseLiveRefreshTimer = window.setInterval(() => {
-          if (navigator.onLine === false) return;
+          if (navigator.onLine === false || document.hidden || hasOpenWorkspaceEditor() || isNotesWorkspaceActive()) return;
           const hasPendingOfflineWork = pendingFirebaseRecords.size || firebasePendingDeletionCount;
           const syncAttempt = hasPendingOfflineWork ? resumePendingFirebaseSync() : Promise.resolve();
           syncAttempt.catch((error) => console.warn('Coada offline Firebase va reîncerca.', error)).finally(() => firebaseRefreshFromCloud());
-        }, 10000);
+        }, 30000);
       }
 
       function activateFirebaseUser(user) {
@@ -5811,10 +5813,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         firebaseInitializePromise=(async()=>{
           firebaseInitialized=true;firebaseAuthReady=false;updateCloudAccountUi();
           firebaseApp=window.firebase.apps?.length?window.firebase.app():window.firebase.initializeApp(firebaseConfig);
-          firebaseAuth=window.firebase.auth();firebaseDb=window.firebase.firestore();firebaseRealtimeDb=window.firebase.database();
+          firebaseAuth=window.firebase.auth();firebaseDb=window.firebase.firestore();firebaseRealtimeDb=null;
           try{firebaseDb.settings({experimentalAutoDetectLongPolling:true,useFetchStreams:false,merge:true});}catch{}
           try{await firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);firebasePersistenceFailed=false;firebaseSessionError='';}catch(error){firebasePersistenceFailed=true;firebaseSessionError='Browserul nu a putut păstra sesiunea Google. Datele locale rămân salvate.';console.warn('Persistența sesiunii Google nu este disponibilă.',error);}
-          await firebaseAuth.getRedirectResult().catch(error=>console.warn('Conectarea Firebase nu a fost finalizată.',error));
           firebaseAuth.onAuthStateChanged(user=>{firebaseAuthReady=true;if(!firebasePersistenceFailed)firebaseSessionError='';activateFirebaseUser(user).catch(error=>console.warn('Pornirea sincronizării Firebase va reîncerca.',error));},error=>{firebaseAuthReady=true;firebaseSessionError='Sesiunea Google nu a putut fi verificată. Datele locale rămân salvate.';updateCloudAccountUi();console.warn(error);});
         })().catch(error=>{firebaseInitialized=false;firebaseInitializePromise=null;firebaseAuthReady=true;updateCloudAccountUi();throw error;});
         return firebaseInitializePromise;
@@ -6339,6 +6340,18 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         }
       }
 
+      async function readProjectSummaries() {
+        const database=await openDatabase();
+        try{return await new Promise((resolve,reject)=>{
+          const tx=database.transaction(projectStore,'readonly'),rows=[],request=tx.objectStore(projectStore).openCursor();
+          request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;const r=cursor.value,p=r.payload||{},images=Array.isArray(p.images)?p.images:[];
+            rows.push({_summary:true,id:r.id,name:r.name,description:r.description,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt||p.updatedAt,favorite:r.favorite,hasThumbnail:Boolean(r.thumbnail),
+              stats:{images:images.length,notes:countProjectNotes(images),models:Array.isArray(p.models)?p.models.length:0,...r.stats},
+              payload:{projectName:p.projectName,projectStatus:p.projectStatus,updatedAt:p.updatedAt,images:images.map((image,i)=>({name:image.name,note:image.note,notes:(Array.isArray(image.notes)?image.notes:[]).map(n=>typeof n==='string'?n:{text:n?.text}),strokes:i===0?image.strokes:[]}))}});
+            cursor.continue();};tx.oncomplete=()=>resolve(rows);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Lista proiectelor nu poate fi citită.'));
+        });}finally{database.close();}
+      }
+      window.atelierProjectSummaries=readProjectSummaries;
       async function readProjectRecord(projectId) {
         if (!projectId) return null;
         const database = await openDatabase();
@@ -7036,7 +7049,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const button = this;
         button.disabled = true;
         try {
-          const viewer = await import('./models/viewer.js?v=1.26.13');
+          window.dispatchEvent(new CustomEvent('atelier-heavy-view-open'));const viewer = await import('./models/viewer.js?v=1.26.14');
           const projectId = activeProjectId;
           const persistModels = async models => {
             if (activeProjectId !== projectId) throw new Error('Proiectul deschis s-a schimbat. Redeschide modelele.');
@@ -7057,7 +7070,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const manager = window.atelierNotes?.manager;
           if (manager) {
             await manager.ready;
-            const legacy = (await manager.store.all()).filter(note => note.projectId === projectId && note.modelSticky && projectModels.some(model => model.id === note.modelId && (note.legacyModelPages?.length || !(model.stickyNotes || []).some(existing => existing.id === note.id && (existing.updatedAt || '') >= (note.updatedAt || '')))));
+            const legacyRows=await manager.store.summaries(),legacyNotes=[];for(const row of legacyRows)if(row.projectId===projectId&&row.modelSticky){const note=await manager.store.get('notes',row.id);if(note)legacyNotes.push(note);}
+            const legacy = legacyNotes.filter(note => note.projectId === projectId && note.modelSticky && projectModels.some(model => model.id === note.modelId && (note.legacyModelPages?.length || !(model.stickyNotes || []).some(existing => existing.id === note.id && (existing.updatedAt || '') >= (note.updatedAt || '')))));
             if (legacy.length) {
               const next = projectModels.map(model => {
                 const notes = new Map((model.stickyNotes || []).map(note => [note.id,note]));
@@ -7258,10 +7272,37 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         await renderProjectCards();
       }
 
+      let projectCoverObserver,projectCoverJobs=[],projectCoverRunning=false,projectCoverCancel;
+      const projectCoversVisible=()=>!document.hidden&&!hasOpenWorkspaceEditor()&&!projectManagerView.hidden&&!document.querySelector('#projectManagerView > .project-manager-content')?.hidden;
+      function stopProjectCovers(){projectCoverObserver?.disconnect();projectCoverObserver=null;projectCoverJobs=[];projectCoverCancel?.();}
+      function queueProjectCover(job){
+        if(typeof IntersectionObserver!=='function'){projectCoverJobs.push(job);processProjectCover();return;}
+        if(!projectCoverObserver)projectCoverObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){projectCoverObserver?.unobserve(entry.target);const job=entry.target._coverJob;if(job)projectCoverJobs.push(job);}processProjectCover();},{rootMargin:'100px'});
+        job.image._coverJob=job;projectCoverObserver.observe(job.image);
+      }
+      function smallProjectCover(src){return new Promise(resolve=>{
+        const image=new Image();let settled=false;
+        const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);image.onload=image.onerror=null;image.removeAttribute('src');projectCoverCancel=null;resolve(value);};
+        const timer=setTimeout(()=>finish(null),10000);projectCoverCancel=()=>finish(null);
+        image.onload=()=>{let c;try{const factor=Math.min(1,540/Math.max(image.naturalWidth,image.naturalHeight));c=document.createElement('canvas');c.width=Math.max(1,Math.round(image.naturalWidth*factor));c.height=Math.max(1,Math.round(image.naturalHeight*factor));const ctx=c.getContext('2d');if(!ctx)return finish(null);ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(image,0,0,c.width,c.height);finish(c.toDataURL('image/jpeg',.86));}catch{finish(null);}finally{if(c)c.width=c.height=1;}};
+        image.onerror=()=>finish(null);image.src=src;
+      });}
+      async function processProjectCover(){
+        if(projectCoverRunning||!projectCoversVisible())return;const job=projectCoverJobs.shift();if(!job)return;projectCoverRunning=true;
+        const current=()=>job.token===projectRenderToken&&job.image.isConnected&&projectCoversVisible();
+        try{if(!current())return;const key='project-cover:'+job.id,cached=await getMetaValue(key);let src=cached?.updatedAt===job.updatedAt?cached.src:null;
+          if(!src&&current()){let record=await readProjectRecord(job.id);const original=record?.thumbnail;record=null;if(original&&current())src=await smallProjectCover(original);if(src&&current())await setMetaValue(key,{updatedAt:job.updatedAt,src});}
+          if(src&&current())job.image.src=src;
+        }catch{}finally{projectCoverRunning=false;if(projectCoverJobs.length)setTimeout(processProjectCover,0);}
+      }
+      window.addEventListener('atelier-note-editor-open',stopProjectCovers);
+      window.addEventListener('atelier-heavy-view-open',stopProjectCovers);
+      document.addEventListener('visibilitychange',()=>{if(document.hidden)stopProjectCovers();else if(projectCoversVisible())renderProjectCards();});
       async function renderProjectCards() {
+        if(hasOpenWorkspaceEditor()||document.hidden||document.querySelector('#projectManagerView > .project-manager-content')?.hidden){projectManagerNeedsRefresh=true;return;}
         const token = ++projectRenderToken;
-        const records = await readAllProjectRecords();
-        const a4Notes = window.atelierNotes?.manager?.store?.db ? await window.atelierNotes.manager.store.all() : [];
+        const records = await readProjectSummaries();
+        const a4Notes = window.atelierNotes?.manager?.store?.db ? await window.atelierNotes.manager.store.summaries() : [];
         if (token !== projectRenderToken) return;
         const notesByProject = new Map();
         a4Notes.forEach((note) => {
@@ -7288,7 +7329,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           return searchable.includes(query);
         });
 
-        projectCards.innerHTML = '';
+        stopProjectCovers();projectCards.querySelectorAll('canvas').forEach(c=>c.width=c.height=1);projectCards.innerHTML = '';
         projectEmptyState.hidden = filteredRecords.length > 0;
         if (!filteredRecords.length) {
           projectEmptyState.textContent = query ? 'Nu există rezultate pentru această căutare.' : selectedProjectStatusFilter === 'all'
@@ -7313,8 +7354,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const thumb = document.createElement('img');
           thumb.className = 'project-card-thumb';
           thumb.alt = record.name || 'Proiect';
-          thumb.src = record.thumbnail || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22540%22 height=%22320%22 viewBox=%220 0 540 320%22%3E%3Crect width=%22540%22 height=%22320%22 fill=%22%23eee6d8%22/%3E%3Cpath d=%22M90 218l90-90 72 72 108-132 90 150v40H90z%22 fill=%22%23d8c7ae%22/%3E%3C/svg%3E';
-          thumbWrap.appendChild(thumb);
+          thumb.loading='lazy';thumb.decoding='async';thumb.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22540%22 height=%22320%22 viewBox=%220 0 540 320%22%3E%3Crect width=%22540%22 height=%22320%22 fill=%22%23eee6d8%22/%3E%3Cpath d=%22M90 218l90-90 72 72 108-132 90 150v40H90z%22 fill=%22%23d8c7ae%22/%3E%3C/svg%3E';
+          thumbWrap.appendChild(thumb);if(record.hasThumbnail)queueProjectCover({image:thumb,id:record.id,updatedAt:record.updatedAt,token});
           const drawingPreview = document.createElement('canvas');
           drawingPreview.className = 'project-card-drawing';
           drawingPreview.setAttribute('aria-hidden', 'true');
@@ -7339,7 +7380,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           favorite.addEventListener('click', async (event) => {
             event.stopPropagation();
             const updatedAt = new Date().toISOString();
-            await saveProjectRecord({ ...record, favorite: !record.favorite, updatedAt, payload: { ...(record.payload || {}), favorite: !record.favorite, updatedAt } });
+            const latest=await readProjectRecord(record.id);if(!latest)return;await saveProjectRecord({ ...latest, favorite: !latest.favorite, updatedAt, payload: { ...(latest.payload || {}), favorite: !latest.favorite, updatedAt } });
             await renderProjectCards();
           });
           const openButton = document.createElement('button');
@@ -7562,7 +7603,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         if (projectDirty) {
           await flushAutosave({ force: true });
         }
-        showProjectManager();
+        await closeActiveProjectSafely();
         await refreshProjectManagerIfNeeded();
       }
 
@@ -7600,6 +7641,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 
       async function handleProjectCardAction(record, action) {
         if (!record || !record.id) return;
+        if(record._summary){record=await readProjectRecord(record.id);if(!record)return;}
         if (action === 'open') {
           await openProjectById(record.id);
           return;
@@ -8212,7 +8254,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         if (!previewCanvas || !Array.isArray(image?.strokes) || !image.strokes.length) return;
         const previewWidth = 640;
         const previewHeight = 360;
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        const pixelRatio = 1;
         previewCanvas.width = Math.round(previewWidth * pixelRatio);
         previewCanvas.height = Math.round(previewHeight * pixelRatio);
         const previewContext = previewCanvas.getContext('2d');
@@ -8248,6 +8290,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         if (!thumbnailStrip) return;
         sanitizeProjectImagesCollection();
         const previousScrollLeft = thumbnailStrip.scrollLeft;
+        thumbnailStrip.querySelectorAll('canvas').forEach(c=>c.width=c.height=1);
         thumbnailStrip.innerHTML = '';
         if (!projectImages.length) {
           syncActiveImageTitleDisplay();
@@ -10959,9 +11002,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         if (currentObjectUrl && currentObjectUrl.startsWith('blob:')) {
           URL.revokeObjectURL(currentObjectUrl);
         }
-        if (photo.src && photo.src.startsWith('blob:')) {
-          photo.removeAttribute('src');
-        }
+        photo.removeAttribute('src');
         currentProjectUpdatedAt = null;
         currentProjectStatus = 'in-progress';
         setProjectName('Proiect nou');
@@ -11019,6 +11060,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         stage.hidden = true;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         noteCanvasCtx.clearRect(0, 0, noteCanvas.width, noteCanvas.height);
+        for(const surface of [canvas,noteCanvas,pencilEditorCanvas,noteHandwritingPreview])if(surface)surface.width=surface.height=1;
         syncBrushControls();
         renderImageThumbnails();
         updateImageTransform();
@@ -11919,7 +11961,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           if (firebaseInitialized && !firebaseUser) {
             throw new Error('AUTH_REQUIRED');
           } else if (firebaseUser) {
-            const completed = await flushPendingFirebaseRecords();
+            const completed = await flushPendingFirebaseRecords({allowWorkspace:true});
             if (!completed) throw new Error('SYNC_PENDING');
             const remoteRef = firebaseManifestRef || firebaseDb.collection(firebaseSyncCollection).doc(firebaseUser.uid).collection('state').doc('manifest');
             firebaseManifestRef = remoteRef;
@@ -12369,7 +12411,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             });
 
             const checkForAppUpdate = () => {
-              if (navigator.onLine === false) return;
+              if (navigator.onLine === false || document.hidden || hasOpenWorkspaceEditor()) return;
               registration.update().catch(() => {});
             };
             checkForAppUpdate();
@@ -12394,9 +12436,9 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.26.13"></script>
+<script src="notes/notes-editor.js?v=1.26.14"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
-<script src="inventory/inventory.js?v=1.26.7"></script>
+<script src="inventory/inventory.js?v=1.26.14"></script>
 
 <style id="workspace-account-notes-layout-v1238">
   #workspaceNotes .workspace-notes-heading {

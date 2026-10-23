@@ -49,7 +49,8 @@
       const ready=()=>{if(++reads<2)return;const current=a.result,tombstone=b.result;if(Boolean(current)!==Boolean(local)||timestamp(current?.updatedAt)!==timestamp(local?.updatedAt)||timestamp(tombstone?.deletedAt)!==timestamp(localDeleted)){cloudSyncRequested++;return;}
         if(deletedAt){records.delete(id);tombstones.put({id,deletedAt:toIso(deletedAt)});}else{records.put(value);tombstones.delete(id);}applied=true;};a.onsuccess=ready;b.onsuccess=ready;tx.oncomplete=()=>resolve(applied);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Sincronizare întreruptă'));});
   }
-  const writingBusy=()=>Boolean(window.atelierIsWriting?.()||window.atelierNotes?.manager?.editor?.isBusy());
+  const workspaceOpen=()=>Boolean(document.hidden||!notesPanel.hidden||document.getElementById('atelierNoteEditor')||document.getElementById('atelierModels')?.open||document.getElementById('editorView')&&!document.getElementById('editorView').hidden);
+  const writingBusy=()=>Boolean(workspaceOpen()||window.atelierIsWriting?.()||window.atelierNotes?.manager?.editor?.isBusy());
   const deferDuringWriting=()=>{if(!writingBusy())return false;cloudSyncRequested++;return true;};
   async function syncFolders(cloud){
     const localFolders=await allFolders(),localDeletes=await allFolderTombstones(),localById=new Map(localFolders.map(folder=>[folder.id,folder])),localDeleteById=new Map(localDeletes.map(item=>[item.id,item.deletedAt]));
@@ -71,7 +72,7 @@
   async function syncInventory(){
     const cloud=window.atelierInventoryCloud;
     if(!db||!cloud?.connected())return false;
-    if(writingBusy()){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncInventory(),10000);return false;}
+    if(writingBusy()){cloudSyncRequested++;clearTimeout(cloudSyncTimer);if(!workspaceOpen())cloudSyncTimer=setTimeout(()=>syncInventory(),10000);return false;}
     if(cloudSyncPromise)return cloudSyncPromise;
     const requestAtStart=cloudSyncRequested;
     cloudSyncPromise=(async()=>{
@@ -101,7 +102,7 @@
   }
   function scheduleCloudSync(){cloudSyncRequested+=1;window.clearTimeout(cloudSyncTimer);if(window.atelierInventoryCloud?.connected())cloudSyncTimer=window.setTimeout(()=>syncInventory(),180);}
   window.addEventListener('atelier-inventory-cloud-change',scheduleCloudSync);
-  window.addEventListener('online',scheduleCloudSync);
+  window.addEventListener('online',scheduleCloudSync);window.addEventListener('atelier-editor-idle',scheduleCloudSync);window.addEventListener('atelier-notes-inactive',scheduleCloudSync);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleCloudSync();});
   window.atelierInventory={all:()=>all(),folders:()=>allFolders(),sync:()=>syncInventory()};
   const showSection=()=>{projectPanel.hidden=true;notesPanel.hidden=true;panel.hidden=false;for(const id of ['workspaceProjectsNav','workspaceNotesNav'])document.getElementById(id)?.removeAttribute('aria-current');nav.setAttribute('aria-current','page');document.title='Inventar | La-Tâmplar';render();};
