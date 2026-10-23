@@ -1,13 +1,13 @@
-const CACHE_NAME = 'fisa-atelier-v352';
+const CACHE_NAME = 'fisa-atelier-v353';
 const AUTH_SCRIPTS=['firebase-app-compat.js','firebase-auth-compat.js','firebase-firestore-compat.js'].map(name=>'https://www.gstatic.com/firebasejs/10.14.1/'+name);
 const APP_FILES = [
   './',
   './index.html',
   './app-safe-area.css?v=1.26.7',
   './workspace-polish.css?v=1.26.7',
-  './sw.js?v=1.26.14',
+  './sw.js?v=1.26.15',
   './notes/notes-editor.css?v=1.26.13',
-  './notes/notes-editor.js?v=1.26.14',
+  './notes/notes-editor.js?v=1.26.15',
   './inventory/inventory.css?v=1.24.10',
   './inventory/inventory.js?v=1.26.14',
   './models/viewer.css?v=1.26.7',

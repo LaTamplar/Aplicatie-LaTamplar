@@ -4798,7 +4798,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.26.14';
+      const APP_VERSION = '1.26.15';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -5491,7 +5491,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           const protectedOfflineIds = await getPendingFirebaseRecordIds();
           const protectedDeletionIds = await getPendingFirebaseDeletionIds();
           for (const [id, deletedAt] of Object.entries(remote.tombstones || {})) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+            if(isContinuousInteractionActive()||document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive()){deferFirebaseReconcile(remote);return false;}
             if (protectedOfflineIds.has(id)||firebaseProjectProtected(id)) continue;
             const localRecord = localMap.get(id);
             if (localRecord && (Date.parse(deletedAt) || 0) >= getRecordUpdatedAt(localRecord)) {
@@ -5500,7 +5500,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
             }
           }
           for (const meta of Object.values(remote.records || {})) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+            if(isContinuousInteractionActive()||document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive()){deferFirebaseReconcile(remote);return false;}
             if (protectedOfflineIds.has(meta.id) || protectedDeletionIds.has(meta.id) || firebaseProjectProtected(meta.id)) continue;
             const localRecord = localMap.get(meta.id);
             if (!localRecord || Date.parse(meta.updatedAt || '') > getRecordUpdatedAt(localRecord)) {
@@ -5512,7 +5512,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
               }
               try{
                 const remoteRecord = await firebaseLoadRecord(meta);
-                if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+                if(isContinuousInteractionActive()||document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive()){deferFirebaseReconcile(remote);return false;}
                 if(!remoteRecord)throw new Error('SYNC_MISSING_CHUNK');
                 if (localRecord) {
                   const full=await readProjectRecord(meta.id);if(full&&JSON.stringify(full)!==JSON.stringify(remoteRecord))await createProjectBackup(full, 'firebase-merge-recovery');
@@ -5524,7 +5524,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           }
           const refreshed = await readProjectSummaries();
           for (const localRecord of refreshed) {
-            if(isContinuousInteractionActive()){deferFirebaseReconcile(remote);return false;}
+            if(isContinuousInteractionActive()||document.hidden||hasOpenWorkspaceEditor()||isNotesWorkspaceActive()){deferFirebaseReconcile(remote);return false;}
             if(failedDownloads.has(localRecord.id)||firebaseProjectProtected(localRecord.id))continue;
             if (protectedOfflineIds.has(localRecord.id) || protectedDeletionIds.has(localRecord.id)) continue;
             const remoteMeta = remote.records?.[localRecord.id];
@@ -12436,7 +12436,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
   </script>
 
 <script src="notes/pdf-lib.min.js"></script>
-<script src="notes/notes-editor.js?v=1.26.14"></script>
+<script src="notes/notes-editor.js?v=1.26.15"></script>
 <link rel="stylesheet" href="inventory/inventory.css?v=1.24.10">
 <script src="inventory/inventory.js?v=1.26.14"></script>
 

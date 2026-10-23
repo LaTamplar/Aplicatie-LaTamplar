@@ -876,7 +876,7 @@
       if(this.syncing){this.syncRequested=true;return false;}
       if(!this.connected())return false;
       this.syncing=true;let retry=false,firstError;const activeEditor=this.editor;const failedUploads=new Set();if(!this.editor)this.status.textContent='Notițele se sincronizează…';
-      const busy=()=>Boolean(this.editor?.isBusy()||window.atelierIsWriting?.()),protectedNow=id=>this.editor?.note.id===id&&(this.editor.dirty||busy());
+      const busy=()=>Boolean(this.editor?.isBusy()||window.atelierIsWriting?.()||!activeEditor&&this.editor),protectedNow=id=>this.editor?.note.id===id;
       const upload=async note=>{try{await this.cloud().save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);return true;}catch(error){firstError??=error;failedUploads.add(note.id);return true;}};
       try{
         await this.store.connect();const cloud=this.cloud(),pending=await this.store.pending(activeEditor?{onlyId:activeEditor.note.id}:{});if(busy()){retry=true;return false;}
