@@ -7,6 +7,7 @@
   const normalizeAngle = value => {let normalized=((Number(value)+180)%360+360)%360-180;if(Math.abs(normalized+180)<1e-9&&Number(value)>0)normalized=180;return normalized;};
   const now = () => new Date().toISOString();
   const AUTOSAVE_IDLE_MS = 10000;
+  const LOCAL_STORE_TIMEOUT_MS = 12000;
   const date = value => new Date(value).toLocaleString('ro-RO', {dateStyle:'short', timeStyle:'short'});
   const size = page => page.orientation === 'landscape' ? [1123, 794] : [794, 1123];
   const pageData = (orientation = 'portrait', paper = 'blank') => ({id:uid(), orientation, paper, objects:[]});
@@ -101,58 +102,88 @@
     }catch{}return settings;
   }
   class NotesStore {
-    async open() {
-      this.db = await new Promise((resolve,reject)=>{ const r=indexedDB.open('atelier-a4-notes',1); r.onupgradeneeded=()=>{r.result.createObjectStore('notes',{keyPath:'id'}); r.result.createObjectStore('meta');}; r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); });
-      this.db.onversionchange=()=>this.db.close();
-      if (!await this.get('meta','legacyImported')) {
-        const raw=localStorage.getItem('atelier-fisa-general-notes-v1');
-        const legacy=raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(legacy) || legacy.some(n=>typeof n?.title!=='string'||typeof n?.content!=='string')) throw Error('Notițele vechi nu pot fi importate. Originalele au fost păstrate.');
-        const tx=this.db.transaction(['notes','meta'],'readwrite');
-        for (let i=0;i<legacy.length;i++) {
-          const n=legacy[i], pages=[];
-          // Preserve every character of long legacy notes across editable A4 pages.
-          const chunks=n.content.match(/[\s\S]{1,1800}/g)||[''];
-          for (const chunk of chunks) { const p=pageData(); p.objects.push(TextObject.create(55,65,chunk,684,950)); pages.push(p); }
-          tx.objectStore('notes').put({id:`legacy-${i}`,schema:1,title:n.title||'Notiță importată',description:'',projectId:'',projectName:'',createdAt:now(),updatedAt:now(),pages});
+    async connect(){
+      if(this.db)return this.db;if(this.connecting)return this.connecting;
+      this.connecting=new Promise((resolve,reject)=>{
+        let settled=false;const r=indexedDB.open('atelier-a4-notes',1);
+        const timer=setTimeout(()=>{settled=true;reject(new DOMException('Stocarea locală nu răspunde.','TimeoutError'));},LOCAL_STORE_TIMEOUT_MS);
+        r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('notes'))r.result.createObjectStore('notes',{keyPath:'id'});if(!r.result.objectStoreNames.contains('meta'))r.result.createObjectStore('meta');};
+        r.onerror=()=>{if(settled)return;settled=true;clearTimeout(timer);reject(r.error||Error('Stocarea locală nu poate fi deschisă.'));};
+        r.onsuccess=()=>{const db=r.result;if(settled){db.close();return;}settled=true;clearTimeout(timer);this.db=db;const disconnected=()=>{if(this.db===db)this.db=null;};db.onversionchange=()=>{db.close();disconnected();};db.onclose=disconnected;resolve(db);};
+      });
+      try{return await this.connecting;}finally{this.connecting=null;}
+    }
+    async transaction(stores,mode,run){
+      for(let attempt=0;attempt<2;attempt++){
+        let db;
+        try{
+          db=await this.connect();
+          return await new Promise((resolve,reject)=>{
+            let tx,timer,result,failure,settled=false;
+            const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(result);};
+            const fail=error=>{failure=error||Error('Operația locală a eșuat.');try{tx?.abort();}catch{}finish(failure);};
+            try{
+              tx=db.transaction(stores,mode);
+              timer=setTimeout(()=>fail(new DOMException('Stocarea locală nu răspunde.','TimeoutError')),LOCAL_STORE_TIMEOUT_MS);
+              tx.oncomplete=()=>finish();tx.onerror=event=>{failure=event.target?.error||tx.error||Error('Operația locală a eșuat.');};tx.onabort=()=>finish(failure||tx.error||new DOMException('Operația locală a fost întreruptă.','AbortError'));
+              // Enqueue all follow-up reads/writes inside request callbacks, while the transaction is active.
+              run(tx,value=>{result=value;},fail);
+            }catch(error){fail(error);}
+          });
+        }catch(error){
+          if(attempt||!['InvalidStateError','TransactionInactiveError','UnknownError','AbortError','TimeoutError'].includes(error?.name))throw error;
+          if(this.db===db){this.db=null;try{db?.close();}catch{}}
         }
-        tx.objectStore('meta').put(true,'legacyImported'); await this.done(tx);
+      }
+    }
+    async open() {
+      await this.connect();
+      if (!await this.get('meta','legacyImported')) {
+        const raw=localStorage.getItem('atelier-fisa-general-notes-v1'),legacy=raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(legacy) || legacy.some(n=>typeof n?.title!=='string'||typeof n?.content!=='string')) throw Error('Notițele vechi nu pot fi importate. Originalele au fost păstrate.');
+        await this.transaction(['notes','meta'],'readwrite',tx=>{
+          for (let i=0;i<legacy.length;i++) {
+            const n=legacy[i],pages=[],chunks=n.content.match(/[\s\S]{1,1800}/g)||[''];
+            for (const chunk of chunks) {const p=pageData();p.objects.push(TextObject.create(55,65,chunk,684,950));pages.push(p);}
+            tx.objectStore('notes').put({id:`legacy-${i}`,schema:1,title:n.title||'Notiță importată',description:'',projectId:'',projectName:'',createdAt:now(),updatedAt:now(),pages});
+          }
+          tx.objectStore('meta').put(true,'legacyImported');
+        });
       }
       return this;
     }
-    done(tx) { return new Promise((resolve,reject)=>{ tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error||Error('Salvare întreruptă')); }); }
-    request(request) {return new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
-    get(store,key) { return new Promise((resolve,reject)=>{const r=this.db.transaction(store).objectStore(store).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
-    all() { return new Promise((resolve,reject)=>{const r=this.db.transaction('notes').objectStore('notes').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
-    async setMeta(key,value) {const tx=this.db.transaction('meta','readwrite');tx.objectStore('meta').put(copy(value),key);await this.done(tx);}
-    async pending() {const tx=this.db.transaction('meta','readonly'),meta=tx.objectStore('meta');const [notes,deletes]=await Promise.all([this.request(meta.get('syncPending')),this.request(meta.get('syncDeletes'))]);return {notes:notes||{},deletes:deletes||{}};}
-    async updateQueue({note,id,deletedAt,removeLocal=false,clearNoteAt,clearDeleteAt}={}) {
-      const tx=this.db.transaction(removeLocal||note?['notes','meta']:['meta'],'readwrite'),finished=this.done(tx),meta=tx.objectStore('meta');
-      const [queuedNotes,queuedDeletes]=await Promise.all([this.request(meta.get('syncPending')),this.request(meta.get('syncDeletes'))]);
-      const pending=queuedNotes||{},deletes=queuedDeletes||{};
-      if(note){tx.objectStore('notes').put(note);pending[note.id]=note;delete deletes[note.id];}
-      else if(removeLocal){tx.objectStore('notes').delete(id);delete pending[id];deletes[id]=deletedAt;}
-      else if(clearNoteAt!==undefined){const current=pending[id],matches=typeof clearNoteAt==='object'?JSON.stringify(current)===JSON.stringify(clearNoteAt):current?.updatedAt===clearNoteAt;if(!matches)return finished;delete pending[id];}
-      else if(clearDeleteAt!==undefined){if(deletes[id]!==clearDeleteAt)return finished;delete deletes[id];}
-      meta.put(pending,'syncPending');meta.put(deletes,'syncDeletes');
-      await finished;
+    get(store,key){return this.transaction([store],'readonly',(tx,result)=>{const r=tx.objectStore(store).get(key);r.onsuccess=()=>result(r.result);});}
+    all(){return this.transaction(['notes'],'readonly',(tx,result)=>{const r=tx.objectStore('notes').getAll();r.onsuccess=()=>result(r.result);});}
+    setMeta(key,value){return this.transaction(['meta'],'readwrite',tx=>{tx.objectStore('meta').put(copy(value),key);});}
+    pending(){return this.transaction(['meta'],'readonly',(tx,result)=>{const meta=tx.objectStore('meta'),a=meta.get('syncPending'),b=meta.get('syncDeletes');let count=0;const ready=()=>{if(++count===2)result({notes:a.result||{},deletes:b.result||{}});};a.onsuccess=b.onsuccess=ready;});}
+    updateQueue({note,id,deletedAt,removeLocal=false,clearNoteAt,clearDeleteAt}={}){
+      return this.transaction(removeLocal||note?['notes','meta']:['meta'],'readwrite',(tx,result,fail)=>{
+        const meta=tx.objectStore('meta'),a=meta.get('syncPending'),b=meta.get('syncDeletes');let count=0;
+        const ready=()=>{if(++count<2)return;try{
+          const pending=a.result||{},deletes=b.result||{};
+          if(note){tx.objectStore('notes').put(note);pending[note.id]=note;delete deletes[note.id];}
+          else if(removeLocal){tx.objectStore('notes').delete(id);delete pending[id];deletes[id]=deletedAt;}
+          else if(clearNoteAt!==undefined){const current=pending[id],matches=typeof clearNoteAt==='object'?JSON.stringify(current)===JSON.stringify(clearNoteAt):current?.updatedAt===clearNoteAt;if(!matches)return;delete pending[id];}
+          else if(clearDeleteAt!==undefined){if(deletes[id]!==clearDeleteAt)return;delete deletes[id];}
+          meta.put(pending,'syncPending');meta.put(deletes,'syncDeletes');
+        }catch(error){fail(error);}};a.onsuccess=b.onsuccess=ready;
+      });
     }
-    async applyRemote({note,id=note?.id,deletedAt,protectedNow=()=>false}) {
-      const tx=this.db.transaction(['notes','meta'],'readwrite'),done=this.done(tx),records=tx.objectStore('notes'),meta=tx.objectStore('meta');
-      const [local,pending,deletes]=await Promise.all([this.request(records.get(id)),this.request(meta.get('syncPending')),this.request(meta.get('syncDeletes'))]);
-      let applied=false;
-      if(!pending?.[id]&&!deletes?.[id]&&!protectedNow()){
-        if(note&&(!local||Date.parse(note.updatedAt)>Date.parse(local.updatedAt))){records.put(copy(note));applied=true;}
-        else if(deletedAt&&local&&Date.parse(deletedAt)>=Date.parse(local.updatedAt)){records.delete(id);applied=true;}
-      }
-      await done;return applied;
+    applyRemote({note,id=note?.id,deletedAt,protectedNow=()=>false}){
+      return this.transaction(['notes','meta'],'readwrite',(tx,result,fail)=>{
+        result(false);const records=tx.objectStore('notes'),meta=tx.objectStore('meta'),a=records.get(id),b=meta.get('syncPending'),c=meta.get('syncDeletes');let count=0;
+        const ready=()=>{if(++count<3)return;try{const local=a.result;if(!b.result?.[id]&&!c.result?.[id]&&!protectedNow()){
+          if(note&&(!local||Date.parse(note.updatedAt)>Date.parse(local.updatedAt))){records.put(copy(note));result(true);}
+          else if(deletedAt&&local&&Date.parse(deletedAt)>=Date.parse(local.updatedAt)){records.delete(id);result(true);}
+        }}catch(error){fail(error);}};a.onsuccess=b.onsuccess=c.onsuccess=ready;
+      });
     }
-    async queueNote(note) {await this.updateQueue({note});}
-    async queueDelete(id,deletedAt) {await this.updateQueue({id,deletedAt,removeLocal:true});}
-    async clearPendingNote(id,updatedAt) {await this.updateQueue({id,clearNoteAt:updatedAt});}
-    async clearPendingDelete(id,deletedAt) {await this.updateQueue({id,clearDeleteAt:deletedAt});}
-    async put(note,{sync=true}={}) {if(sync){await this.queueNote(note);window.dispatchEvent(new CustomEvent('atelier-notes-local-change'));}else{const tx=this.db.transaction('notes','readwrite'),finished=this.done(tx);tx.objectStore('notes').put(copy(note));await finished;}}
-    async remove(id,{sync=true,deletedAt=now()}={}) {if(sync){await this.queueDelete(id,deletedAt);window.dispatchEvent(new CustomEvent('atelier-notes-local-change'));}else{const tx=this.db.transaction('notes','readwrite'),finished=this.done(tx);tx.objectStore('notes').delete(id);await finished;}}
+    async queueNote(note){await this.updateQueue({note});}
+    async queueDelete(id,deletedAt){await this.updateQueue({id,deletedAt,removeLocal:true});}
+    async clearPendingNote(id,updatedAt){await this.updateQueue({id,clearNoteAt:updatedAt});}
+    async clearPendingDelete(id,deletedAt){await this.updateQueue({id,clearDeleteAt:deletedAt});}
+    async put(note,{sync=true}={}){if(sync){await this.queueNote(note);window.dispatchEvent(new CustomEvent('atelier-notes-local-change'));}else await this.transaction(['notes'],'readwrite',tx=>tx.objectStore('notes').put(copy(note)));}
+    async remove(id,{sync=true,deletedAt=now()}={}){if(sync){await this.queueDelete(id,deletedAt);window.dispatchEvent(new CustomEvent('atelier-notes-local-change'));}else await this.transaction(['notes'],'readwrite',tx=>tx.objectStore('notes').delete(id));}
   }
 
   class TextObject {
@@ -456,7 +487,8 @@
       const header=el('header','an-editor-header');const titleBlock=el('div','an-document-name');this.title=el('strong','',this.note.title);this.saveStatus=el('span','an-save-status','Salvat pe acest dispozitiv');this.saveStatus.setAttribute('role','status');titleBlock.append(this.title,this.saveStatus);
       this.pagesToggle=button('Pagini',()=>this.togglePages(),'sidebar','an-pages-toggle');this.pagesToggle.setAttribute('aria-expanded','true');this.pagesToggle.setAttribute('aria-controls','an-note-pages');this.pagesToggle.title='Ascunde paginile';
       this.zoomLabel=el('output','an-footer-zoom-value','100%');this.zoomLabel.setAttribute('aria-label','Zoom pagină');const zoomControls=el('div','an-footer-zoom');zoomControls.setAttribute('role','group');zoomControls.setAttribute('aria-label','Zoom pagină');zoomControls.append(button('Micșorează pagina',()=>this.zoomCentered(this.zoom/1.2),'minus','an-icon'),this.zoomLabel,button('Mărește pagina',()=>this.zoomCentered(this.zoom*1.2),'plus','an-icon'),button('Încadrează pagina',()=>this.fit(),'fitPage','an-fit-page'));
-      header.append(button(options.backLabel||'Notițe',()=>this.close(),'back'),titleBlock,this.pagesToggle,button('Detalii',()=>manager.details(this.note,updated=>{this.edit(()=>Object.assign(this.note,updated));this.title.textContent=this.note.title;}),'edit'),button('Exportă',()=>this.exportMenu(),'export'));
+      this.backButton=button(options.backLabel||'Notițe',()=>this.close(),'back');
+      header.append(this.backButton,titleBlock,this.pagesToggle,button('Detalii',()=>manager.details(this.note,updated=>{this.edit(()=>Object.assign(this.note,updated));this.title.textContent=this.note.title;}),'edit'),button('Exportă',()=>this.exportMenu(),'export'));
       this.sheet=el('div','an-sheet');this.canvas=el('canvas','an-canvas');this.canvas.setAttribute('aria-label','Pagina A4. Alege un instrument pentru a edita.');this.liveCanvas=el('canvas','an-live-canvas');this.liveCanvas.setAttribute('aria-hidden','true');this.sheet.append(this.canvas,this.liveCanvas);this.canvas.tabIndex=0;this.canvas.draggable=false;
       this.board=el('div','an-board');this.space=el('div','an-sheet-space');this.space.append(this.sheet);this.board.append(this.space);
       this.pages=new PageManager(this);this.selection=new SelectionLayer(this);this.toolbar=new Toolbar(this);this.toolbar.top.prepend(this.pagesToggle);
@@ -505,17 +537,31 @@
     isBusy(){return Boolean(this.gesture||this.textComposing||(this.lastInputAt&&performance.now()-this.lastInputAt<AUTOSAVE_IDLE_MS));}
     scheduleSave(delay=AUTOSAVE_IDLE_MS){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush({force:false}).catch(()=>{}),delay);}
     schedulePagesRender(delay=2000){clearTimeout(this.pagesTimer);this.pagesTimer=setTimeout(()=>{this.pagesTimer=null;if(!this.root.isConnected)return;if(this.isBusy()){this.schedulePagesRender();return;}this.pages.updateCurrentThumbnail();},delay);}
+    commitPendingStroke(){if(this.gesture?.kind==='draw'&&this.preview){const last=this.preview.points.at(-1),r=this.sheet.getBoundingClientRect();this.up({pointerId:this.gesture.id,pointerType:'pen',pressure:last.p,clientX:r.left+last.x*this.zoom,clientY:r.top+last.y*this.zoom,preventDefault(){}});}}
     async flush({force=true}={}){
       clearTimeout(this.timer);
-      if(force&&this.gesture?.kind==='draw'&&this.preview){const last=this.preview.points.at(-1),r=this.sheet.getBoundingClientRect();this.up({pointerId:this.gesture.id,pointerType:'pen',pressure:last.p,clientX:r.left+last.x*this.zoom,clientY:r.top+last.y*this.zoom,preventDefault(){}});clearTimeout(this.timer);}
+      if(force){this.commitPendingStroke();clearTimeout(this.timer);}
       if(!force&&this.isBusy()){if(this.dirty)this.scheduleSave();return;}
       if(this.saving){await this.saving;return this.flush({force});}
       if(!this.dirty)return;
       const revision=this.revision,data={...this.note,pages:this.note.pages.map(p=>({...p,objects:p.objects.map(o=>o.type==='drawing'?{...o}:o.type==='image'?{...o,crop:{...o.crop}}:copy(o))}))};this.status('Se salvează…');
-      this.saving=this.manager.store.put(data).then(()=>{if(revision===this.revision){this.dirty=false;this.status('Salvat pe acest dispozitiv');}}).catch(error=>{this.status('Salvarea a eșuat. Păstrează editorul deschis și exportă o copie editabilă.',true);throw error;});
+      this.saving=this.manager.store.put(data).then(()=>{if(revision===this.revision){this.dirty=false;this.status(this.manager.syncError?'Salvat pe tabletă · sincronizarea va reîncerca.':'Salvat pe acest dispozitiv');}}).catch(error=>{this.status(error?.name==='QuotaExceededError'?'Spațiul local este insuficient. Păstrează notița deschisă și exportă o copie editabilă.':'Salvarea locală nu s-a încheiat. Reîncearcă sau exportă o copie editabilă.',true);throw error;});
       try{await this.saving;}finally{this.saving=null;}
     }
-    async close(){this.cancelCrop();this.endText();this.clearLiveStroke();clearTimeout(this.pagesTimer);try{await this.flush();}catch{return;}this.pages.destroy();this.images.clear();ImageObject.retain([]);this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;this.manager.editor=null;window.dispatchEvent(new CustomEvent('atelier-editor-idle'));await this.manager.render();if(this.onClose)await this.onClose();else document.getElementById('workspaceAddNote').focus();}
+    async close(){
+      if(this.closing)return this.closing;
+      this.backButton.disabled=true;
+      this.closing=(async()=>{
+        this.cancelCrop();this.endText();clearTimeout(this.pagesTimer);
+        try{await this.flush();}catch{return false;}
+        this.clearLiveStroke();this.pages.destroy();this.images.clear();ImageObject.retain([]);this.toolbar.destroy();this.abort.abort();this.resize.disconnect();cancelAnimationFrame(this.frame);this.root.remove();document.body.style.overflow=this.oldOverflow;
+        if(this.manager.editor===this)this.manager.editor=null;
+        window.dispatchEvent(new CustomEvent('atelier-editor-idle'));
+        try{await this.manager.render();}catch{this.manager.status.textContent='Notița este salvată local. Lista nu a putut fi reîmprospătată; redeschide secțiunea Notițe.';this.manager.status.classList.add('an-error');}
+        if(this.onClose)await this.onClose();else document.getElementById('workspaceAddNote').focus();return true;
+      })();
+      try{return await this.closing;}finally{this.closing=null;this.backButton.disabled=false;}
+    }
     undo(){this.cancelCrop();this.endText();if(!this.past.length)return;this.future.push(copy(this.note));this.note=this.past.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     redo(){this.cancelCrop();this.endText();if(!this.future.length)return;this.past.push(copy(this.note));this.note=this.future.pop();this.pageIndex=clamp(this.note.activePage??this.pageIndex,0,this.note.pages.length-1);this.selected=null;this.changed();this.refresh();this.canvas.focus({preventScroll:true});}
     setTool(tool){this.cancelCrop();this.endText();this.tool=tool==='marker'?'pencil':tool;this.drawKind=this.tool==='pencil'?'pencil':this.drawKind;this.selected=null;this.refresh(false);}
@@ -685,7 +731,7 @@
     }
     key(event){if(event.isComposing||this.textComposing)return;const mod=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();if(event.key==='Escape'){if(this.cropSession){this.cancelCrop();return;}this.toolbar.closePopover();if(this.textEditor){this.endText();this.canvas.focus();return;}}if(mod&&['b','i','u'].includes(key)&&(this.textEditor||this.object?.type==='text')){event.preventDefault();const property={b:'bold',i:'italic',u:'underline'}[key];this.applyTextPatch({[property]:!this.textSelectionStyle()[property]});return;}if(this.textEditor&&mod&&['z','y'].includes(key)){event.preventDefault();key==='y'||event.shiftKey?this.redo():this.undo();return;}if(event.target.closest('input,textarea,select,[contenteditable]'))return;if(mod&&key==='c'&&this.object){event.preventDefault();this.objectClipboard=copy(this.object);navigator.clipboard?.writeText(this.object.text||'').catch(()=>{});return;}if(mod&&key==='v'&&this.objectClipboard){event.preventDefault();this.snapshot();const n=copy(this.objectClipboard);n.id=uid();n.x+=18;n.y+=18;n.locked=false;this.page.objects.push(n);this.selected=n.id;this.changed();this.refresh();return;}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?this.redo():this.undo();}else if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='y'){event.preventDefault();this.redo();}else if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();this.removeObject();}else if(event.key==='Escape'){this.selected=null;this.toolbar.renderContext();this.selection.render();}}
     exportMenu(){
-      this.endText();
+      this.endText();this.commitPendingStroke();
       const d=el('dialog','an-dialog an-export-dialog'),header=el('div','an-export-header'),heading=el('div'),body=el('div','an-export-body'),scopeSection=el('section','an-export-scope'),content=el('section','an-export-formats');
       heading.append(el('span','an-export-eyebrow','Export inteligent'),el('h2','','Exportă notița'),el('p','','Alege paginile o singură dată, apoi formatul potrivit.'));
       header.append(heading,button('Închide',()=>d.close(),'close','an-icon an-export-close'));
@@ -705,7 +751,7 @@
         ['A4','Tipărește','Trimite paginile selectate la imprimantă',async items=>Export.print(scopedNote(items))],
         ['EDIT','Copie editabilă','Păstrează elementele pentru editare ulterioară',async items=>download(new Blob([JSON.stringify(scopedNote(items))],{type:'application/json'}),filename(this.note.title)+'.anote.json')]
       ];
-      for(const [format,name,description,action] of options){const b=button(name,async()=>{b.disabled=true;try{const items=selected();this.status('Se pregătește exportul…');let saved=true;try{await this.flush();}catch{saved=false;}await action(items);this.status(saved?'Export pregătit.':'Export pregătit. Salvarea locală trebuie reîncercată.',!saved);d.close();}catch(error){this.status(error.message,true);selectionText.textContent=error.message;selectionText.classList.add('is-empty');}finally{b.disabled=false;}},null,'an-export-option');const copyBlock=el('span','an-export-copy');copyBlock.append(el('strong','',name),el('small','',description));b.replaceChildren(el('span','an-export-format',format),copyBlock,el('span','an-export-arrow','›'));grid.append(b);}
+      for(const [format,name,description,action] of options){const b=button(name,async()=>{b.disabled=true;try{const items=selected();this.status('Se pregătește exportul…');if(format==='EDIT'){await action(items);this.status(this.dirty?'Copie editabilă pregătită. Modificările sunt încă în editor.':'Copie editabilă pregătită.');d.close();return;}let saved=true;try{await this.flush();}catch{saved=false;}await action(items);this.status(saved?'Export pregătit.':'Export pregătit. Salvarea locală trebuie reîncercată.',!saved);d.close();}catch(error){this.status(error.message,true);selectionText.textContent=error.message;selectionText.classList.add('is-empty');}finally{b.disabled=false;}},null,'an-export-option');const copyBlock=el('span','an-export-copy');copyBlock.append(el('strong','',name),el('small','',description));b.replaceChildren(el('span','an-export-format',format),copyBlock,el('span','an-export-arrow','›'));grid.append(b);}
       const formatHeading=el('div','an-export-section-heading');formatHeading.append(el('div','','Alege formatul'),el('span','','Fișiere pregătite pentru partajare'));content.append(formatHeading,grid);body.append(scopeSection,content);d.append(header,body);syncScope();d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
     }
   }
@@ -731,21 +777,30 @@
     async sync(){
       if(this.editor?.isBusy()||window.atelierIsWriting?.()){this.syncSoon();return false;}
       if(this.syncing){this.syncRequested=true;return false;}
-      if(!this.store.db||!this.connected())return false;
-      this.syncing=true;let retry=false;if(!this.editor)this.status.textContent='Notițele se sincronizează…';
+      if(!this.connected())return false;
+      this.syncing=true;let retry=false,firstError;const failedUploads=new Set();if(!this.editor)this.status.textContent='Notițele se sincronizează…';
       const busy=()=>Boolean(this.editor?.isBusy()||window.atelierIsWriting?.()),protectedNow=id=>this.editor?.note.id===id&&(this.editor.dirty||busy());
+      const upload=async note=>{try{await this.cloud().save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);return true;}catch(error){firstError??=error;failedUploads.add(note.id);return true;}};
       try{
-        const cloud=this.cloud(),pending=await this.store.pending();if(busy()){retry=true;return false;}
-        for(const [id,deletedAt] of Object.entries(pending.deletes)){if(busy()){retry=true;return false;}await cloud.remove(id,deletedAt);await this.store.clearPendingDelete(id,deletedAt);}
-        for(const note of Object.values(pending.notes)){if(busy()){retry=true;return false;}await cloud.save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);}
-        if(busy()){retry=true;return false;}const remote=await cloud.pull();if(busy()){retry=true;return false;}
+        await this.store.connect();const cloud=this.cloud(),pending=await this.store.pending();if(busy()){retry=true;return false;}
+        for(const [id,deletedAt] of Object.entries(pending.deletes)){if(busy()){retry=true;return false;}try{await cloud.remove(id,deletedAt);await this.store.clearPendingDelete(id,deletedAt);}catch(error){firstError??=error;}}
+        for(const note of Object.values(pending.notes)){if(busy()){retry=true;return false;}if(!await upload(note))return false;}
+        if(busy()){retry=true;return false;}
+        const localVersions=Object.fromEntries((await this.store.all()).map(note=>[note.id,note.updatedAt]));
+        const remote=await cloud.pull(localVersions);if(remote.deferred||busy()){retry=true;return false;}
+        const failedDownloads=new Set((remote.failed||[]).map(item=>item.id));
+        if(failedDownloads.size)firstError??=Object.assign(Error('O notiță din cloud nu poate fi citită complet.'),{code:remote.failed[0].code});
         for(const [id,deletedAt] of Object.entries(remote.tombstones||{})){if(busy()){retry=true;return false;}await this.store.applyRemote({id,deletedAt,protectedNow:()=>protectedNow(id)});}
         for(const note of remote.notes||[]){if(busy()){retry=true;return false;}const applied=await this.store.applyRemote({note,protectedNow:()=>protectedNow(note.id)});if(applied&&this.editor?.note.id===note.id&&!protectedNow(note.id)){this.editor.note=copy(note);this.editor.pageIndex=clamp(note.activePage||0,0,note.pages.length-1);this.editor.refresh();}}
-        const remoteById=new Map((remote.notes||[]).map(note=>[note.id,note])),local=await this.store.all();
-        for(const note of local){if(busy()){retry=true;return false;}const remoteNote=remoteById.get(note.id),deletedAt=Date.parse(remote.tombstones?.[note.id]||'')||0;if(deletedAt>(Date.parse(note.updatedAt)||0))continue;if(!remoteNote||(Date.parse(note.updatedAt)||0)>(Date.parse(remoteNote.updatedAt)||0)){await cloud.save(note);if(busy()){retry=true;return false;}await this.store.clearPendingNote(note.id,note);}}
-        this.syncError='';if(this.editor&&!this.editor.dirty)this.editor.status('Salvat și sincronizat');return true;
-      }catch(error){retry=true;this.syncError='Notițele sunt salvate local. Sincronizarea va reîncerca automat.';if(this.editor)this.editor.status('Salvat local · sincronizarea va reîncerca.',true);throw error;}
-      finally{this.syncing=false;if(retry||this.syncRequested){this.syncRequested=false;this.syncSoon(5000);}if(!this.editor)await this.render();}
+        const remoteById=new Map(Object.values(remote.metas||{}).map(meta=>[meta.id,meta]));for(const note of remote.notes||[])remoteById.set(note.id,note);
+        for(const note of await this.store.all()){if(busy()){retry=true;return false;}if(failedUploads.has(note.id)||failedDownloads.has(note.id))continue;const remoteNote=remoteById.get(note.id),deletedAt=Date.parse(remote.tombstones?.[note.id]||'')||0;if(deletedAt>(Date.parse(note.updatedAt)||0))continue;if(!remoteNote||(Date.parse(note.updatedAt)||0)>(Date.parse(remoteNote.updatedAt)||0)){if(!await upload(note))return false;}}
+        if(firstError)throw firstError;
+        this.syncError='';if(this.editor&&!this.editor.dirty&&!this.editor.saving)this.editor.status('Salvat și sincronizat');return true;
+      }catch(error){
+        retry=true;const detail=String(error?.code||error?.message||'').toLowerCase();
+        this.syncError=detail.includes('quota')||detail.includes('resource-exhausted')?'Limita serviciului cloud a fost atinsă temporar. Copiile locale sunt păstrate; sincronizarea va reîncerca.':detail.includes('permission')||detail.includes('unauthenticated')?'Accesul cloud pentru notițe a fost refuzat. Verifică același cont Google pe PC și tabletă; copiile locale sunt păstrate.':'Sincronizarea notițelor nu s-a încheiat. Copiile locale sunt păstrate; aplicația va reîncerca automat.';
+        if(this.editor&&!this.editor.dirty&&!this.editor.saving)this.editor.status('Salvat pe tabletă · sincronizarea va reîncerca.',true);throw error;
+      }finally{this.syncing=false;if(retry||this.syncRequested){this.syncRequested=false;this.syncSoon(5000);}window.dispatchEvent(new CustomEvent('atelier-notes-sync-status'));if(!this.editor)await this.render();}
     }
     async projects(){return new Promise(resolve=>{let request;try{request=indexedDB.open('fisa-atelier-offline');}catch{resolve([]);return;}request.onerror=()=>resolve([]);request.onsuccess=()=>{const db=request.result;if(!db.objectStoreNames.contains('projects')){db.close();resolve([]);return;}const transaction=db.transaction('projects','readonly'),read=transaction.objectStore('projects').getAll();read.onerror=()=>{db.close();resolve([]);};read.onsuccess=()=>{const projects=(read.result||[]).map(project=>({id:project.id,name:project.name||project.payload?.projectName||'Proiect fără nume'})).filter(project=>project.id).sort((a,b)=>a.name.localeCompare(b.name,'ro'));db.close();resolve(projects);};};});}
     async details(note,save,linkedProject=null){const projects=await this.projects(),content=el('div','an-form-grid'),title=input(note?.title||'');title.required=true;title.maxLength=160;title.placeholder='De exemplu: Măsurători bucătărie';const projectChoices=[['','Fără proiect asociat'],...projects.map(project=>[project.id,project.name])],project=select(projectChoices,note?.projectId||'');content.append(field('Titlu notiță',title));if(!linkedProject)content.append(field('Proiect asociat (opțional)',project));let template;if(!note){template=this.pageTemplates();content.append(template.node);}else content.append(el('p','an-hint',`Creată ${date(note.createdAt)} · Modificată ${date(note.updatedAt)}`));dialog(note?'Detaliile notiței':'Notiță nouă',content,async()=>{if(!title.value.trim())throw Error('Introdu un titlu.');const selectedProject=linkedProject||projects.find(item=>item.id===project.value);const relation={projectId:selectedProject?.id||'',projectName:selectedProject?.name||''};const next=note?{title:title.value.trim(),...relation}:{id:uid(),schema:1,title:title.value.trim(),description:'',...relation,createdAt:now(),updatedAt:now(),pages:[pageData(template.value.orientation,template.value.paper)]};await save(next);},note?'Salvează':'Creează');}
@@ -787,7 +842,7 @@
     async newForProject(project){if(!project?.id)return;await this.ready;const linkedProject={id:project.id,name:project.name||'Proiect fără nume'};await this.details(null,async note=>{await this.store.put(note);await this.render();this.open(note);},linkedProject);}
     async openById(noteId){if(!noteId)return false;await this.ready;const note=await this.store.get('notes',noteId);if(!note)return false;this.show(true);this.open(note);return true;}
     pageTemplates(headingText='Prima foaie'){const node=el('section','an-template-picker'),heading=el('span','an-template-heading',headingText),choices=el('div','an-template-choices');let value={orientation:'portrait',paper:'blank'};const templates=[['portrait','blank','A4 vertical','Albă'],['portrait','grid','A4 vertical','Cu pătrățele'],['portrait','ruled','A4 vertical','Cu linii'],['landscape','blank','A4 orizontal','Albă'],['landscape','grid','A4 orizontal','Cu pătrățele'],['landscape','ruled','A4 orizontal','Cu linii']];for(const [orientation,paper,format,label] of templates){const item=button(`${format} · ${label}`,()=>{value={orientation,paper};for(const choice of choices.children)choice.setAttribute('aria-pressed','false');item.setAttribute('aria-pressed','true');},paper==='grid'?'shape':paper==='ruled'?'text':'image','an-template-choice');item.dataset.orientation=orientation;item.dataset.paper=paper;item.setAttribute('aria-pressed',String(orientation==='portrait'&&paper==='blank'));const sheet=el('span',`an-template-sheet an-${orientation} an-${paper}`);const copy=el('span','an-template-copy');copy.append(el('strong','',format),el('small','',label));item.replaceChildren(sheet,copy);choices.append(item);}node.append(heading,choices);return {node,get value(){return value;}};}
-    async render(){if(!this.store.db)return;const token=this.renderToken=uid();const notes=(await this.store.all()).filter(note=>!note.modelSticky);if(token!==this.renderToken)return;this.list.replaceChildren();this.list.className='an-note-grid'+(this.layout==='list'?' manager-list-view':'');const managerPanel=this.panel||this.list.closest('#workspaceNotes'),countAll=managerPanel?.querySelector('[data-notes-count="all"]'),countFavorites=managerPanel?.querySelector('[data-notes-count="favorites"]');if(countAll)countAll.textContent=notes.length;if(countFavorites)countFavorites.textContent=notes.filter(note=>note.favorite).length;const sortMode=this.sort?.value||'updated';notes.sort((a,b)=>sortMode==='name'?a.title.localeCompare(b.title,'ro'):sortMode==='created'?(Date.parse(b.createdAt)||0)-(Date.parse(a.createdAt)||0):(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0));const filtered=notes.filter(n=>(this.filter!=='favorites'||n.favorite)&&(n.title+' '+n.description+' '+n.projectName+' '+n.pages.flatMap(p=>p.objects.map(o=>o.text||'')).join(' ')).toLocaleLowerCase('ro-RO').includes(this.query));this.status.classList.toggle('an-error',Boolean(this.syncError));const noteCountLabel=`${notes.length} ${notes.length===1?'notiță':'notițe'}`;this.status.textContent=this.syncError||`${noteCountLabel} · ${this.syncing?'Se sincronizează…':this.connected()?'Sincronizare activă între dispozitive':'Salvat local · conectează același cont pe PC și tabletă'}`;
+    async render(){await this.store.connect();const token=this.renderToken=uid();const notes=(await this.store.all()).filter(note=>!note.modelSticky);if(token!==this.renderToken)return;this.list.replaceChildren();this.list.className='an-note-grid'+(this.layout==='list'?' manager-list-view':'');const managerPanel=this.panel||this.list.closest('#workspaceNotes'),countAll=managerPanel?.querySelector('[data-notes-count="all"]'),countFavorites=managerPanel?.querySelector('[data-notes-count="favorites"]');if(countAll)countAll.textContent=notes.length;if(countFavorites)countFavorites.textContent=notes.filter(note=>note.favorite).length;const sortMode=this.sort?.value||'updated';notes.sort((a,b)=>sortMode==='name'?a.title.localeCompare(b.title,'ro'):sortMode==='created'?(Date.parse(b.createdAt)||0)-(Date.parse(a.createdAt)||0):(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0));const filtered=notes.filter(n=>(this.filter!=='favorites'||n.favorite)&&(n.title+' '+n.description+' '+n.projectName+' '+n.pages.flatMap(p=>p.objects.map(o=>o.text||'')).join(' ')).toLocaleLowerCase('ro-RO').includes(this.query));this.status.classList.toggle('an-error',Boolean(this.syncError));const noteCountLabel=`${notes.length} ${notes.length===1?'notiță':'notițe'}`;this.status.textContent=this.syncError||`${noteCountLabel} · ${this.syncing?'Se sincronizează…':this.connected()?'Sincronizare activă între dispozitive':'Salvat local · conectează același cont pe PC și tabletă'}`;
       if(!filtered.length)this.list.append(el('p','an-empty',notes.length?'Nu există notițe care corespund filtrului sau căutării.':'Prima ta notiță începe cu o foaie A4. Adaugă text, schițe și fotografii.'));
       for(const note of filtered){const card=el('article','an-note-card'),open=button(note.title,()=>this.open(note));open.classList.add('an-note-open');open.removeAttribute('title');const preview=el('canvas');preview.width=250;preview.height=160;open.prepend(preview);const heading=el('div','an-note-card-heading'),title=el('h3','an-note-card-title',note.title),favorite=button(note.favorite?'Elimină de la favorite':'Adaugă la favorite',async()=>{note.favorite=!note.favorite;note.updatedAt=now();await this.store.put(note);await this.render();},'star','an-favorite-button');favorite.setAttribute('aria-pressed',String(Boolean(note.favorite)));if(note.favorite)favorite.classList.add('is-active');heading.append(title,favorite);const pageCount=`${note.pages.length} ${note.pages.length===1?'pagină':'pagini'}`,relation=note.projectName?el('span','an-note-project',note.projectName):null,dateLine=el('p','an-note-date',`Ultima modificare: ${date(note.updatedAt)}`),stats=el('div','an-note-card-stats'),pageStat=el('span','',pageCount),projectStat=el('span','',note.projectName?'Proiect asociat':'Fără proiect asociat');stats.append(pageStat,projectStat);const actions=el('details','an-note-card-menu'),summary=el('summary','','⋯'),menu=el('div','an-note-card-menu-items'),noteMenuButton=(label,emoji,action,danger=false)=>{const item=button(label,action,null,danger?'an-danger':'');item.prepend(el('span','an-note-menu-icon',emoji));return item;};summary.setAttribute('aria-label','Acțiuni notiță');if(note.projectId)menu.append(noteMenuButton('Deschide proiectul asociat','↗',async()=>{actions.open=false;const opened=await window.atelierOpenProjectById?.(note.projectId);if(!opened)this.status.textContent='Proiectul asociat nu mai există pe acest dispozitiv.';}));menu.append(noteMenuButton('Asociază cu un proiect','📓',()=>{actions.open=false;this.associateWithProject(note);}),noteMenuButton('Editează','✏️',()=>this.details(note,async patch=>{Object.assign(note,patch,{updatedAt:now()});await this.store.put(note);await this.render();})),noteMenuButton('Duplică','📄',async()=>{try{const n=copy(note);n.id=uid();n.title+=' — copie';n.createdAt=n.updatedAt=now();n.pages.forEach(p=>{p.id=uid();p.objects.forEach(o=>o.id=uid());});await this.store.put(n);await this.render();}catch(error){this.status.textContent=error.message;}}),noteMenuButton('Șterge','🗑️',()=>dialog('Ștergi această notiță?',el('p','',`„${note.title}” va fi ștearsă de pe acest dispozitiv. Exportă înainte o copie dacă vrei să o păstrezi.`),async()=>{await this.store.remove(note.id);await this.render();},'Șterge'),true));actions.append(summary,menu);
         const cardActions=el('div','an-card-actions project-card-actions');cardActions.append(favorite,actions);
