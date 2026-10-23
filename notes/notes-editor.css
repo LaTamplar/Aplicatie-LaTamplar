@@ -3514,3 +3514,11 @@
  .an-editor .an-toolbar.an-toolbar.an-toolbar .an-modes>[data-mode]:hover:not([aria-pressed=true]),
  .an-editor .an-toolbar.an-toolbar.an-toolbar .an-tools-row>.an-pages-toggle:hover:not([aria-expanded=true]){background:#f0f5fa!important;border-color:#e2eaf2!important;box-shadow:none!important}
 }
+
+
+/* Magnetic image alignment: transient guides, with a constant screen weight. */
+.an-alignment-guides{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden}
+.an-alignment-guides[hidden],.an-alignment-guides i[hidden]{display:none}
+.an-alignment-guides i{position:absolute;display:block;background:#447fc4;box-shadow:0 0 0 calc(.5px / var(--an-zoom,1)) #ffffffb3}
+.an-alignment-guides .an-guide-x{top:0;bottom:0;width:calc(1px / var(--an-zoom,1));transform:translateX(-50%)}
+.an-alignment-guides .an-guide-y{left:0;right:0;height:calc(1px / var(--an-zoom,1));transform:translateY(-50%)}
