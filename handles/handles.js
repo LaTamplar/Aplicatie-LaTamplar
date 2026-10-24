@@ -11,6 +11,8 @@
   const unique=values=>[...new Set(values.filter(Boolean))];
   const finishAttr=name=>/finis|culoa|nuan|color/.test(normalize(name));
   const sizeAttr=name=>/marime|dimensi|lungime|latime|inaltime|interax|diamet|grosime/.test(normalize(name));
+  const finishFilters=[['crom','Crom'],['negru','Negru'],['alb','Alb'],['auriu','Auriu'],['inox','Inox / Nichel'],['antic','Antichizat'],['aluminiu','Aluminiu'],['gri','Gri'],['lemn','Lemn'],['cristal','Cristal']];
+  const chosenFinishes=new Set();let filtersExpanded=false;
   let catalog=null,loading=null,query='',pageIndex=0,selected=null,selection=null,activeImage='',listScroll=0,openerId='',zoomDialog=null;
   const button=(text,cls,action)=>{const b=element('button',cls,text);b.type='button';if(action)b.addEventListener('click',action);return b;};
   function picture(src,alt,cls=''){
@@ -29,13 +31,42 @@
     const sizes=unique(product.variants.flatMap(v=>Object.entries(v.attributes).filter(([a])=>sizeAttr(a)).map(([,v])=>v)));
     return{finishes,sizes};
   }
+  function makeFilters(){
+    const area=element('aside','handles-filter-area');area.setAttribute('aria-label','Filtre pentru mânere');
+    const toggle=button('','handles-filter-toggle',()=>{
+      filtersExpanded=!filtersExpanded;toggle.setAttribute('aria-expanded',String(filtersExpanded));box.dataset.expanded=String(filtersExpanded);
+    });
+    toggle.setAttribute('aria-expanded',String(filtersExpanded));toggle.setAttribute('aria-controls','handlesFinishFilters');
+    toggle.append(element('span','','Filtre'),element('span','handles-filter-badge',chosenFinishes.size?String(chosenFinishes.size):'Finisaj'));
+    const box=element('div','handles-filter-panel');box.id='handlesFinishFilters';box.dataset.expanded=String(filtersExpanded);
+    const head=element('div','handles-filter-heading');head.append(element('strong','','Filtre'));
+    const clear=button('Resetează','handles-filter-clear',()=>{
+      chosenFinishes.clear();clearTimeout(searchTimer);query=search.value;pageIndex=0;showList();
+      content.querySelector('input[name=handleFinish]')?.focus({preventScroll:true});
+    });
+    clear.hidden=!chosenFinishes.size;head.append(clear);box.append(head);
+    const group=element('fieldset','handles-finish-options');group.append(element('legend','','Finisaj'));
+    for(const [value,name] of finishFilters){
+      const label=element('label','handles-finish-option'),input=element('input');input.type='checkbox';input.value=value;input.name='handleFinish';input.checked=chosenFinishes.has(value);
+      const count=catalog.finishCounts[value];
+      input.setAttribute('aria-label',name+', '+count+' produse');
+      input.addEventListener('change',()=>{
+        if(input.checked)chosenFinishes.add(value);else chosenFinishes.delete(value);
+        clearTimeout(searchTimer);query=search.value;pageIndex=0;showList();
+        content.querySelector('input[name=handleFinish][value="'+value+'"]')?.focus({preventScroll:true});
+      });
+      label.append(input,element('span','handles-finish-label',name),element('span','handles-finish-count',String(count)));group.append(label);
+    }
+    box.append(group);area.append(toggle,box);return area;
+  }
   function showList({restore=false}={}){
     if(!catalog)return;
     selected=null;panel.dataset.view='list';search.closest('label').hidden=false;releaseImages();
-    const words=normalize(query).split(/\s+/).filter(Boolean),rows=catalog.products.filter(p=>words.every(w=>p.searchText.includes(w)));
+    const words=normalize(query).split(/\s+/).filter(Boolean),rows=catalog.products.filter(p=>words.every(w=>p.searchText.includes(w))&&(!chosenFinishes.size||p.finishTags.some(f=>chosenFinishes.has(f))));
     const pageSize=24;pageIndex=Math.min(pageIndex,Math.max(0,Math.ceil(rows.length/pageSize)-1));
     status.textContent=rows.length+' '+(rows.length===1?'model':'modele')+' · '+catalog.variantCount.toLocaleString('ro-RO')+' variante în catalog';
-    const grid=element('div','handles-grid');
+    const listing=element('div','handles-list-layout'),results=element('div','handles-results'),grid=element('div','handles-grid');
+    listing.append(makeFilters(),results);content.append(listing);
     for(const p of rows.slice(pageIndex*pageSize,(pageIndex+1)*pageSize)){
       const card=button('','handles-card',()=>openProduct(p));card.dataset.handleId=p.id;card.setAttribute('aria-label','Vezi '+p.name);
       card.append(picture(p.cover,p.name,'handles-card-image'));
@@ -46,15 +77,15 @@
       info.append(element('span','handles-card-meta',p.variants.length+' '+(p.variants.length===1?'variantă':'variante')+(facts.sizes.length?' · '+facts.sizes.length+' '+(facts.sizes.length===1?'dimensiune':'dimensiuni'):'')));
       card.append(info);grid.append(card);
     }
-    content.append(grid);
-    if(!rows.length)content.append(element('p','handles-empty','Nu am găsit mânere pentru această căutare. Încearcă numele, codul, finisajul sau dimensiunea.'));
+    results.append(grid);
+    if(!rows.length)results.append(element('p','handles-empty','Nu am găsit mânere pentru căutarea și filtrele alese. Modifică selecția sau resetează filtrele.'));
     if(rows.length>pageSize){
       const pages=element('nav','handles-pagination');pages.setAttribute('aria-label','Pagini din catalogul de mânere');
       const move=delta=>{pageIndex+=delta;showList();panel.scrollIntoView({block:'start',behavior:'instant'});content.querySelector('.handles-card')?.focus({preventScroll:true});};
       const prev=button('← Anterioarele','handles-page-prev',()=>move(-1)),next=button('Următoarele →','handles-page-next',()=>move(1));
       prev.disabled=pageIndex===0;next.disabled=(pageIndex+1)*pageSize>=rows.length;
       pages.append(prev,element('span','handles-page-label',(pageIndex*pageSize+1)+'–'+Math.min((pageIndex+1)*pageSize,rows.length)+' din '+rows.length),next);
-      content.append(pages);
+      results.append(pages);
     }
     if(restore){
       const card=content.querySelector('[data-handle-id="'+openerId+'"]');card?.focus({preventScroll:true});window.scrollTo({top:listScroll,behavior:'instant'});
@@ -155,7 +186,8 @@
     if(loading)return loading;
     loading=fetch(new URL('catalog.json?v=1.28.0',base)).then(r=>{if(!r.ok)throw Error('catalog');return r.json();}).then(data=>{
       if(!Array.isArray(data.products)||!data.products.length)throw Error('catalog');
-      data.products.forEach(p=>{p.searchText=normalize([p.name,p.finishes,...p.variants.flatMap(v=>[v.sku,...Object.values(v.attributes),v.spec])].join(' '));});
+      data.products.forEach(p=>{p.finishTags=normalize(p.finishes).split(/\s+/).filter(Boolean);p.searchText=normalize([p.name,p.finishes,...p.variants.flatMap(v=>[v.sku,...Object.values(v.attributes),v.spec])].join(' '));});
+      data.finishCounts=Object.fromEntries(finishFilters.map(([value])=>[value,data.products.filter(p=>p.finishTags.includes(value)).length]));
       catalog=data;return data;
     }).catch(error=>{loading=null;throw error;});
     return loading;
