@@ -30,6 +30,11 @@
 #workspaceHandles .handles-image-error,.handles-image-dialog .handles-image-error{padding:20px;color:#8a9baa;text-align:center;font:400 12px/1.5 system-ui,sans-serif}
 #workspaceHandles .handles-more,#workspaceHandles .handles-back,.handles-image-dialog .handles-zoom-close{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:0 14px;border:1px solid #c8dbe9;border-radius:9px;background:#f7fafc;color:#315f91;box-shadow:none;font:500 12px/1.35 system-ui,sans-serif;transform:none;touch-action:manipulation}
 #workspaceHandles .handles-more{display:flex;margin:24px auto 12px}
+#workspaceHandles .handles-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin:24px 0 12px;flex-wrap:wrap}
+#workspaceHandles .handles-pagination button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;margin:0;border:1px solid #c8dbe9;border-radius:9px;background:#f7fafc;color:#315f91;box-shadow:none;font:500 12px/1.35 system-ui,sans-serif;transform:none;touch-action:manipulation}
+#workspaceHandles .handles-pagination button:hover:not(:disabled){background:#eaf2f9;border-color:#a6c4db;transform:none;box-shadow:none}
+#workspaceHandles .handles-pagination button:disabled{opacity:.38;cursor:default}
+#workspaceHandles .handles-page-label{color:#8a9eae;font:400 11px/1.5 system-ui,sans-serif;font-variant-numeric:tabular-nums}
 #workspaceHandles .handles-more:hover,#workspaceHandles .handles-back:hover{background:#eaf2f9;border-color:#a6c4db;color:#254f73;transform:none;box-shadow:none}
 #workspaceHandles .handles-empty{padding:40px 12px;color:#7d92a3;text-align:center;font:400 14px/1.6 system-ui,sans-serif}
 #workspaceHandles .handles-attribution{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:28px 0 0;padding-top:14px;border-top:1px solid #dce6ee;color:#93a3b0;font:400 11px/1.5 system-ui,sans-serif}
