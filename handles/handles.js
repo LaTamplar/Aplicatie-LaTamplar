@@ -12,9 +12,48 @@
   const finishAttr=name=>/finis|culoa|nuan|color/.test(normalize(name));
   const sizeAttr=name=>/marime|dimensi|lungime|latime|inaltime|interax|diamet|grosime/.test(normalize(name));
   const finishFilters=[['crom','Crom'],['negru','Negru'],['alb','Alb'],['auriu','Auriu'],['inox','Inox / Nichel'],['antic','Antichizat'],['aluminiu','Aluminiu'],['gri','Gri'],['lemn','Lemn'],['cristal','Cristal']];
+  const categories=[
+    {id:'handles',title:'Mânere',file:'catalog.json?v=1.28.0',models:451,variants:2027,cover:'https://otto.info.ro/catalog/manere-img/maner-profil-3996-aluminiu.webp',back:'← Toate mânerele'},
+    {id:'legs',title:'Picioare',file:'legs.json?v=1.29.0',models:45,variants:191,cover:'https://otto.info.ro/images/external/gomagcdn.ro/03ed2777f66af019.webp',back:'← Toate picioarele'}
+  ];
+  const catalogs=new Map(),loadings=new Map(),categoryStates=new Map();
+  const heading=panel.querySelector('h1'),categoryNav=panel.querySelector('[data-catalog-navigation]');
+  let currentCategory=null,requestVersion=0;
   const chosenFinishes=new Set();let filtersExpanded=false;
-  let catalog=null,loading=null,query='',pageIndex=0,selected=null,selection=null,activeImage='',listScroll=0,openerId='',zoomDialog=null;
+  let catalog=null,query='',pageIndex=0,selected=null,selection=null,activeImage='',listScroll=0,openerId='',zoomDialog=null;
   const button=(text,cls,action)=>{const b=element('button',cls,text);b.type='button';if(action)b.addEventListener('click',action);return b;};
+  function saveCategory(){
+    if(!currentCategory)return;
+    const value=search.value;
+    categoryStates.set(currentCategory.id,{query:value,pageIndex:query===value?pageIndex:0,finishes:[...chosenFinishes],expanded:filtersExpanded});
+  }
+  function showCategories(){
+    saveCategory();clearTimeout(searchTimer);requestVersion++;currentCategory=null;catalog=null;selected=null;
+    panel.dataset.view='categories';panel.removeAttribute('data-category');heading.textContent='Accesorii';document.title='Accesorii | La-Tâmplar';search.closest('label').hidden=true;categoryNav.hidden=true;status.textContent='2 categorii';content.removeAttribute('aria-busy');releaseImages();
+    const grid=element('div','catalog-category-grid');
+    for(const category of categories){
+      const card=button('','catalog-category-card',()=>openCategory(category));card.dataset.catalogCategory=category.id;
+      card.append(picture(category.cover,category.title,'catalog-category-image'));
+      const info=element('span','catalog-category-info');info.append(element('strong','',category.title),element('span','',category.models+' modele · '+category.variants.toLocaleString('ro-RO')+' variante'));card.append(info);grid.append(card);
+    }
+    content.append(grid);
+  }
+  async function openCategory(category){
+    saveCategory();clearTimeout(searchTimer);currentCategory=category;catalog=null;selected=null;
+    const state=categoryStates.get(category.id)||{query:'',pageIndex:0,finishes:[],expanded:false};
+    query=state.query;search.value=query;pageIndex=state.pageIndex;chosenFinishes.clear();state.finishes.forEach(f=>chosenFinishes.add(f));filtersExpanded=state.expanded;
+    const version=++requestVersion;releaseImages();panel.dataset.category=category.id;panel.dataset.view='loading';heading.textContent=category.title;document.title=category.title+' | La-Tâmplar';
+    search.closest('label').hidden=false;search.placeholder='Caută model, finisaj, cod sau dimensiune...';search.setAttribute('aria-label','Caută în categoria '+category.title.toLocaleLowerCase('ro-RO'));
+    categoryNav.hidden=false;status.textContent='Se încarcă '+category.title.toLocaleLowerCase('ro-RO')+'…';content.setAttribute('aria-busy','true');
+    try{
+      const data=await load(category);
+      if(version!==requestVersion||panel.hidden||currentCategory!==category)return;
+      catalog=data;showList();
+    }catch{
+      if(version!==requestVersion||panel.hidden)return;
+      status.textContent='Categoria nu a putut fi încărcată. Verifică conexiunea.';content.append(button('Reîncearcă','handles-back',()=>openCategory(category)));
+    }finally{if(version===requestVersion)content.removeAttribute('aria-busy');}
+  }
   function picture(src,alt,cls=''){
     const wrap=element('span','handles-picture '+cls),img=element('img');
     img.alt=alt;img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';
@@ -32,7 +71,7 @@
     return{finishes,sizes};
   }
   function makeFilters(){
-    const area=element('aside','handles-filter-area');area.setAttribute('aria-label','Filtre pentru mânere');
+    const area=element('aside','handles-filter-area');area.setAttribute('aria-label','Filtre pentru '+currentCategory.title.toLocaleLowerCase('ro-RO'));
     const toggle=button('','handles-filter-toggle',()=>{
       filtersExpanded=!filtersExpanded;toggle.setAttribute('aria-expanded',String(filtersExpanded));box.dataset.expanded=String(filtersExpanded);
     });
@@ -46,7 +85,7 @@
     });
     clear.hidden=!chosenFinishes.size;head.append(clear);box.append(head);
     const group=element('fieldset','handles-finish-options');group.append(element('legend','','Finisaj'));
-    for(const [value,name] of finishFilters){
+    for(const [value,name] of catalog.availableFilters){
       const label=element('label','handles-finish-option'),input=element('input');input.type='checkbox';input.value=value;input.name='handleFinish';input.checked=chosenFinishes.has(value);
       const count=catalog.finishCounts[value];
       input.setAttribute('aria-label',name+', '+count+' produse');
@@ -78,9 +117,9 @@
       card.append(info);grid.append(card);
     }
     results.append(grid);
-    if(!rows.length)results.append(element('p','handles-empty','Nu am găsit mânere pentru căutarea și filtrele alese. Modifică selecția sau resetează filtrele.'));
+    if(!rows.length)results.append(element('p','handles-empty','Nu am găsit produse pentru căutarea și filtrele alese. Modifică selecția sau resetează filtrele.'));
     if(rows.length>pageSize){
-      const pages=element('nav','handles-pagination');pages.setAttribute('aria-label','Pagini din catalogul de mânere');
+      const pages=element('nav','handles-pagination');pages.setAttribute('aria-label','Pagini din categoria '+currentCategory.title.toLocaleLowerCase('ro-RO'));
       const move=delta=>{pageIndex+=delta;showList();panel.scrollIntoView({block:'start',behavior:'instant'});content.querySelector('.handles-card')?.focus({preventScroll:true});};
       const prev=button('← Anterioarele','handles-page-prev',()=>move(-1)),next=button('Următoarele →','handles-page-next',()=>move(1));
       prev.disabled=pageIndex===0;next.disabled=(pageIndex+1)*pageSize>=rows.length;
@@ -102,7 +141,7 @@
   function renderChoice(){
     const data=content.querySelector('.handles-variant-data');data.replaceChildren();
     const list=element('dl','handles-specs');
-    for(const [a,v] of Object.entries(selection.attributes)){list.append(element('dt','',a),element('dd','',v));}
+    for(const [a,v] of Object.entries(selection.attributes)){list.append(element('dt','',normalize(a)==='inaltime'?'Înălțime':a),element('dd','',v+(selected.units?.[a]?' '+selected.units[a]:'')));}
     if(!selected.attributes.some(finishAttr)&&selected.finishes){list.append(element('dt','','Finisaje în catalog'),element('dd','',selected.finishes));}
     if(selection.spec){list.append(element('dt','','Detalii'),element('dd','',selection.spec));}
     list.append(element('dt','','Cod variantă'),element('dd','handles-sku',selection.sku||'Neprecizat'));data.append(list);
@@ -122,7 +161,7 @@
     clearTimeout(searchTimer);if(query!==search.value){query=search.value;pageIndex=0;}
     listScroll=window.scrollY;openerId=product.id;selected=product;panel.dataset.view='detail';search.closest('label').hidden=true;releaseImages();
     status.textContent='OTTO · '+product.variants.length+' '+(product.variants.length===1?'variantă':'variante')+' · '+product.images.length+' imagini';
-    const back=button('← Toate mânerele','handles-back',()=>showList({restore:true})),title=element('h2','handles-product-title',product.name);title.tabIndex=-1;
+    const back=button(currentCategory.back,'handles-back',()=>showList({restore:true})),title=element('h2','handles-product-title',product.name);title.tabIndex=-1;
     const head=element('div','handles-detail-heading');head.append(back,title);content.append(head);
     const layout=element('div','handles-detail-grid'),gallery=element('div','handles-gallery'),main=button('','handles-main-image',openImage);
     const strip=element('div','handles-thumbnails');strip.setAttribute('aria-label','Imagini pentru '+product.name);
@@ -134,15 +173,17 @@
       thumbnail.append(picture(src,''));strip.append(thumbnail);
     });
     gallery.append(main,element('p','handles-image-caption'),strip);
-    const details=element('div','handles-details');details.append(element('p','handles-eyebrow','DIMENSIUNI ȘI FINISAJE'),element('div','handles-variant-data'));
+    const details=element('div','handles-details');
+    if(product.description)details.append(element('p','catalog-product-description',product.description));
+    details.append(element('p','handles-eyebrow','DIMENSIUNI ȘI FINISAJE'),element('div','handles-variant-data'));
     const groups=element('div','handles-attribute-groups');
     for(const attribute of product.attributes){
       const values=unique(product.variants.map(v=>v.attributes[attribute]));
       if(values.length<2)continue;
-      const group=element('fieldset','handles-attribute'),legend=element('legend','',attribute);group.append(legend);
+      const group=element('fieldset','handles-attribute'),legend=element('legend','',normalize(attribute)==='inaltime'?'Înălțime':attribute);group.append(legend);
       const choices=element('div','handles-choices');
       values.forEach(value=>{
-        const b=button(value,'handles-choice',()=>chooseAttribute(attribute,value));b.dataset.handleAttribute=attribute;b.dataset.handleValue=value;b.setAttribute('aria-pressed','false');choices.append(b);
+        const b=button(value+(product.units?.[attribute]?' '+product.units[attribute]:''),'handles-choice',()=>chooseAttribute(attribute,value));b.dataset.handleAttribute=attribute;b.dataset.handleValue=value;b.setAttribute('aria-pressed','false');choices.append(b);
       });
       group.append(choices);groups.append(group);
     }
@@ -157,7 +198,6 @@
       b.append(element('span','',Object.values(v.attributes).join(' · ')||v.spec||'Variantă'),element('small','',v.sku));vlist.append(b);
     });
     variants.append(vlist);details.append(variants);
-    const source=element('a','handles-source','Vezi fișa OTTO ↗');source.href=product.source;source.target='_blank';source.rel='noopener noreferrer';details.append(source);
     layout.append(gallery,details);content.append(layout);
     if(product.technical.length){
       const technical=element('section','handles-technical');technical.append(element('h3','','Desene tehnice'));
@@ -181,28 +221,26 @@
     const wrap=element('div','handles-zoom-body');wrap.append(picture(src,selected.name));
     zoomDialog.replaceChildren(close,wrap);zoomDialog.showModal();
   }
-  async function load(){
-    if(catalog)return catalog;
-    if(loading)return loading;
-    loading=fetch(new URL('catalog.json?v=1.28.0',base)).then(r=>{if(!r.ok)throw Error('catalog');return r.json();}).then(data=>{
+  async function load(category){
+    if(catalogs.has(category.id))return catalogs.get(category.id);
+    if(loadings.has(category.id))return loadings.get(category.id);
+    const pending=fetch(new URL(category.file,base)).then(r=>{if(!r.ok)throw Error('catalog');return r.json();}).then(data=>{
       if(!Array.isArray(data.products)||!data.products.length)throw Error('catalog');
-      data.products.forEach(p=>{p.finishTags=normalize(p.finishes).split(/\s+/).filter(Boolean);p.searchText=normalize([p.name,p.finishes,...p.variants.flatMap(v=>[v.sku,...Object.values(v.attributes),v.spec])].join(' '));});
+      data.products.forEach(p=>{p.finishTags=p.filterTags||normalize(p.finishes).split(/\s+/).filter(Boolean);p.searchText=normalize([p.name,p.finishes,...p.variants.flatMap(v=>[v.sku,...Object.values(v.attributes),v.spec])].join(' '));});
       data.finishCounts=Object.fromEntries(finishFilters.map(([value])=>[value,data.products.filter(p=>p.finishTags.includes(value)).length]));
-      catalog=data;return data;
-    }).catch(error=>{loading=null;throw error;});
-    return loading;
+      data.availableFilters=category.id==='handles'?finishFilters:finishFilters.filter(([value])=>data.finishCounts[value]>0);
+      catalogs.set(category.id,data);return data;
+    }).catch(error=>{loadings.delete(category.id);throw error;});
+    loadings.set(category.id,pending);return pending;
   }
   async function show(){
     sections.forEach(s=>{if(s)s.hidden=true;});otherNavs.forEach(n=>n?.removeAttribute('aria-current'));
-    panel.hidden=false;nav.setAttribute('aria-current','page');document.title='Mânere | La-Tâmplar';
+    panel.hidden=false;nav.setAttribute('aria-current','page');
     window.atelierNotes?.manager?.suspendPreviews?.(true);window.dispatchEvent(new CustomEvent('atelier-notes-inactive'));
-    if(catalog){if(!content.children.length)showList();return;}
-    status.textContent='Se încarcă mânerele…';content.setAttribute('aria-busy','true');
-    try{await load();if(!panel.hidden)showList();}
-    catch{if(!panel.hidden){releaseImages();status.textContent='Catalogul nu a putut fi încărcat. Verifică conexiunea.';content.append(button('Reîncearcă','handles-back',show));}}
-    finally{content.removeAttribute('aria-busy');}
+    if(currentCategory)await openCategory(currentCategory);else showCategories();
   }
-  function leave(){if(panel.hidden)return;clearTimeout(searchTimer);if(query!==search.value){query=search.value;pageIndex=0;}panel.hidden=true;nav.removeAttribute('aria-current');releaseImages();}
+  function leave(){if(panel.hidden)return;saveCategory();clearTimeout(searchTimer);requestVersion++;panel.hidden=true;nav.removeAttribute('aria-current');releaseImages();}
+  categoryNav.querySelector('button').addEventListener('click',()=>{showCategories();panel.scrollIntoView({block:'start',behavior:'instant'});});
   nav.addEventListener('click',show);
   otherNavs.forEach(n=>n?.addEventListener('click',leave,{capture:true}));
   for(const id of ['backToProjects','pmNewProject','pmImportProject'])document.getElementById(id)?.addEventListener('click',leave,{capture:true});

@@ -15,6 +15,18 @@
 #workspaceHandles .handles-search input:is(:focus,:focus-visible){outline:none!important;outline-offset:0!important;box-shadow:none!important;border:0}
 #workspaceHandles .handles-search input::placeholder{color:#8a9faf;opacity:1}
 #workspaceHandles .handles-status{margin:14px 0 18px;color:#71899e;font:400 12px/1.5 system-ui,sans-serif}
+#workspaceHandles .catalog-navigation{display:flex;align-items:center;gap:12px;margin-top:14px}
+#workspaceHandles .catalog-navigation[hidden]{display:none}
+#workspaceHandles .catalog-navigation button{display:inline-flex;align-items:center;min-height:44px;margin:0;padding:0 13px;border:1px solid #cadce9;border-radius:9px;background:#f7fafc;color:#315f91;font:500 12px/1.4 system-ui,sans-serif;box-shadow:none;transform:none;touch-action:manipulation}
+#workspaceHandles .catalog-navigation button:hover{background:#eaf2f9;border-color:#acc8dc;box-shadow:none;transform:none}
+#workspaceHandles .catalog-category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:920px}
+#workspaceHandles .catalog-category-card{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;min-width:0;margin:0;padding:0;overflow:hidden;white-space:normal;text-align:left;border:1px solid #dee7ee;border-radius:16px;background:#fff;color:#294359;box-shadow:0 3px 12px #24415a04;transform:none;touch-action:manipulation}
+#workspaceHandles .catalog-category-card:hover{border-color:#aac6dc;background:#fff;color:#294359;box-shadow:0 5px 18px #24415a0c;transform:none}
+#workspaceHandles .catalog-category-card .catalog-category-image{width:100%;height:215px;padding:18px;border-bottom:1px solid #eef3f6}
+#workspaceHandles .catalog-category-info{display:flex;flex-direction:column;gap:9px;min-width:0;padding:20px}
+#workspaceHandles .catalog-category-info strong{color:#35536d;font:600 18px/1.35 system-ui,sans-serif}
+#workspaceHandles .catalog-category-info>span{color:#8196a7;font:400 12px/1.5 system-ui,sans-serif}
+#workspaceHandles .catalog-product-description{margin:0 0 20px;color:#7890a3;font:400 12px/1.65 system-ui,sans-serif}
 #workspaceHandles .handles-list-layout{display:grid;grid-template-columns:184px minmax(0,1fr);gap:20px;align-items:start}
 #workspaceHandles .handles-results{min-width:0}
 #workspaceHandles .handles-filter-area{min-width:0;position:sticky;top:calc(var(--app-safe-top,0px) + 18px);max-height:calc(var(--app-safe-height,100dvh) - 40px);overflow:auto;overscroll-behavior:contain}
@@ -128,6 +140,10 @@
  #workspaceHandles .handles-card-info{padding:15px 13px}
 }
 @container handles-panel (max-width:479px){
+ #workspaceHandles .catalog-category-grid{grid-template-columns:minmax(0,1fr);gap:12px}
+ #workspaceHandles .catalog-category-card{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center}
+ #workspaceHandles .catalog-category-card .catalog-category-image{height:112px;padding:12px;border-bottom:0;border-right:1px solid #eef3f6}
+ #workspaceHandles .catalog-category-info{padding:16px}
  #workspaceHandles .handles-heading{gap:14px}
  #workspaceHandles .handles-search{width:100%;margin-left:0}
  #workspaceHandles .handles-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
