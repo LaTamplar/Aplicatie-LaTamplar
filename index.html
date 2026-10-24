@@ -4025,6 +4025,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         <button type="button" id="workspaceProjectsNav" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3Z"/></svg>Proiecte</button>
         <button type="button" id="workspaceNotesNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6Z"/><path d="M9 10h6M9 14h6M9 18h4"/></svg>Notițe</button>
         <button type="button" id="workspaceInventoryNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4.5 7.8 7.5 4.3 7.5-4.3M12 12v8.5M8 5.3l8 4.6"/></svg>Inventar</button>
+        <button type="button" id="workspaceHandlesNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v4H4Z M7 11v6M17 11v6M5 17h4M15 17h4"/></svg>Mânere</button>
       </nav>
       <button type="button" id="workspaceAboutNav" class="workspace-about-button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>Despre aplicație</span></button>
       <div class="workspace-sidebar-footer">
@@ -4088,6 +4089,15 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
     </div>
     <p id="workspaceInventoryStatus" class="workspace-inventory-status" role="status" aria-live="polite">Salvat local pe acest dispozitiv.</p>
     <div id="workspaceInventoryList" class="workspace-inventory-grid" aria-live="polite"></div>
+    </section>
+    <section id="workspaceHandles" hidden aria-labelledby="workspaceHandlesTitle">
+      <header class="handles-heading">
+        <div class="handles-identity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v4H4Z M7 11v6M17 11v6M5 17h4M15 17h4"/></svg><h1 id="workspaceHandlesTitle">Mânere</h1></div>
+        <label class="handles-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.5 4.5"/></svg><input type="search" placeholder="Caută model, finisaj, cod sau dimensiune..." aria-label="Caută în catalogul de mânere"></label>
+      </header>
+      <p class="handles-status" data-handles-status role="status" aria-live="polite"></p>
+      <div data-handles-content></div>
+      <footer class="handles-attribution"><a href="https://otto.info.ro/catalog/manere/manere" target="_blank" rel="noopener noreferrer">Catalog OTTO</a><span>· Imagini și date OTTO · Actualizat la 24.10.2026</span></footer>
     </section>
     <section id="workspaceAbout" class="workspace-about" hidden aria-labelledby="workspaceAboutTitle">
       <header class="about-hero">
@@ -4798,7 +4808,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.27.2';
+      const APP_VERSION = '1.28.0';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -13546,6 +13556,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 <link rel="stylesheet" href="./workspace-polish.css?v=1.26.7">
 <link rel="stylesheet" href="./project-editor.css?v=1.27.1">
 <link rel="stylesheet" href="./library-controls.css?v=1.27.2">
+<link rel="stylesheet" href="./handles/handles.css?v=1.28.0">
+<script src="./handles/handles.js?v=1.28.0" defer></script>
 <link rel="stylesheet" href="./app-safe-area.css?v=1.26.7">
 </body>
 </html>
