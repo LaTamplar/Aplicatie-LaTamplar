@@ -1,0 +1,104 @@
+/* Shared instrument frame, including image/drawing selection. */
+#atelierNoteEditor.an-editor .an-toolbar{padding:6px 12px!important;gap:0!important}
+#atelierNoteEditor.an-editor .an-toolbar .an-tools-row,
+#atelierNoteEditor.an-editor .an-toolbar .an-context{
+ box-sizing:border-box!important;width:min(100%,1000px)!important;max-width:100%!important;min-width:0!important;margin-inline:auto!important
+}
+#atelierNoteEditor.an-editor .an-toolbar .an-tools-row{height:52px!important;min-height:52px!important;padding:3px!important;gap:5px!important;border-radius:14px!important;overflow:visible!important}
+#atelierNoteEditor.an-editor .an-toolbar:has(.an-context:not([hidden])) .an-tools-row{border-bottom:0!important;border-radius:14px 14px 0 0!important}
+#atelierNoteEditor.an-editor .an-toolbar .an-context{
+ margin-top:0!important;margin-bottom:0!important;padding:5px 10px!important;min-height:56px!important;max-height:none!important;height:auto!important;
+ border:1px solid #d8e3ed!important;border-top:1px solid #e5edf3!important;border-radius:0 0 14px 14px!important;
+ background:#fbfdff!important;box-shadow:none!important;align-items:center!important;justify-content:center!important;overflow:visible!important
+}
+#atelierNoteEditor.an-editor .an-toolbar .an-context[hidden]{display:none!important}
+#atelierNoteEditor.an-editor .an-toolbar .an-context:has(.an-object-adjustments){display:flex!important;flex-flow:row wrap!important;gap:8px!important}
+#atelierNoteEditor.an-editor .an-context :is(.an-object-primary-actions,.an-object-adjustments,.an-object-secondary-actions){height:44px!important;min-height:44px!important}
+#atelierNoteEditor.an-editor .an-context .an-object-primary-actions{padding:0!important}
+#atelierNoteEditor.an-editor .an-context .an-object-primary-actions .an-button{height:44px!important;min-height:44px!important}
+#atelierNoteEditor.an-editor .an-context .an-object-secondary-actions{padding:0!important}
+#atelierNoteEditor.an-editor .an-context .an-object-secondary-actions .an-button{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important}
+#atelierNoteEditor.an-editor .an-toolbar .an-context[data-mode=text]{
+ display:grid!important;grid-template-columns:112px 80px 72px 132px 44px 44px max-content max-content!important;
+ grid-template-areas:"preset font size style alignment list palette history"!important;gap:6px!important
+}
+#atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-field>.an-text-style-group{padding:0!important;gap:0!important}
+#atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-field>.an-text-style-group>.an-text-style-button{height:44px!important;min-height:44px!important;flex:1 1 0!important;min-width:0!important}
+#atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-color-field{padding-inline:5px!important;gap:2px!important}
+#atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-context-history{padding-left:6px!important}
+@container note-toolbar (max-width:1000px){
+ #atelierNoteEditor.an-editor .an-toolbar .an-context[data-mode=text]{
+  grid-template-columns:minmax(100px,1.2fr) minmax(70px,.9fr) minmax(66px,.8fr) 132px 44px 44px!important;
+  grid-template-areas:"preset font size style alignment list" "palette palette palette palette history history"!important
+ }
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-color-field{justify-self:start!important;border-left:0!important;padding-left:0!important}
+}
+@container note-toolbar (max-width:620px){
+ #atelierNoteEditor.an-editor .an-toolbar .an-context[data-mode=text]{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)!important;
+  grid-template-areas:"preset font size" "style alignment list" "palette palette palette" "history history history"!important
+ }
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-field{width:100%!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-context-history{justify-self:center!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-context:is([data-mode=pencil],[data-mode=shape]):not(:has(.an-object-adjustments)){
+  grid-template-columns:minmax(0,1fr) 44px!important;grid-template-areas:"tools tools" "palette palette" "clear history"!important;gap:5px!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-context:is([data-mode=pencil],[data-mode=shape])>.an-color-field{justify-self:center!important}
+ #atelierNoteEditor.an-editor .an-context .an-object-adjustments>.an-range-field{grid-template-columns:145px!important;width:145px!important;min-width:145px!important}
+}
+@container note-toolbar (max-width:440px){
+ #atelierNoteEditor.an-editor .an-toolbar .an-context[data-mode=text]{display:flex!important;flex-wrap:wrap!important;justify-content:center!important;gap:4px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>[data-text-control]{flex:0 0 auto!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>[data-text-control=preset]{width:112px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>[data-text-control=font]{width:80px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>[data-text-control=size]{width:72px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>[data-text-control=style]{width:132px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>:is([data-text-control=alignment],[data-text-control=list]){width:44px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-color-field{flex:0 0 auto!important;width:max-content!important;padding:0!important;gap:2px!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-context-history{flex:0 0 88px!important;width:88px!important;min-width:88px!important;margin:0!important;padding:0!important;gap:0!important;border:0!important}
+ #atelierNoteEditor.an-editor .an-context[data-mode=text]>.an-context-history>.an-button{width:44px!important;min-width:44px!important;margin:0!important;padding:0!important}
+}
+/* On landscape tablets the document header and instrument tabs share one row.
+   The toolbar keeps its box and positioning context for all existing popovers. */
+@media (any-pointer:coarse) and (orientation:landscape) and (min-width:1000px) and (max-width:1400px) and (min-height:600px){
+ #atelierNoteEditor.an-editor{grid-template-columns:360px minmax(0,1fr)!important;grid-template-rows:52px auto minmax(0,1fr) auto!important}
+ #atelierNoteEditor.an-editor>.an-editor-header{
+  grid-column:1!important;grid-row:1!important;position:relative!important;z-index:5!important;
+  width:100%!important;height:52px!important;min-height:52px!important;margin:0!important;padding:4px 6px!important;gap:6px!important;border:0!important;background:#fbfdff!important
+ }
+ #atelierNoteEditor.an-editor .an-editor-header>.an-button{height:44px!important;min-height:44px!important;margin:0!important;padding:0 9px!important;flex:none!important}
+ #atelierNoteEditor.an-editor .an-editor-header>.an-button:not(:first-child){width:44px!important;min-width:44px!important;padding:0!important}
+ #atelierNoteEditor.an-editor .an-editor-header>.an-button:not(:first-child)>span{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important}
+ #atelierNoteEditor.an-editor .an-document-name{min-width:0!important;gap:2px!important}
+ #atelierNoteEditor.an-editor .an-document-name strong{font-size:13px!important;line-height:17px!important}
+ #atelierNoteEditor.an-editor .an-save-status{display:block!important;max-width:100%!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important;font-size:10px!important;line-height:14px!important}
+ #atelierNoteEditor.an-editor>.an-toolbar{
+  grid-column:1/-1!important;grid-row:1/span 2!important;display:grid!important;grid-template-columns:352px minmax(0,1fr)!important;
+  grid-template-rows:52px auto!important;padding:0 8px 4px!important;gap:0!important;min-width:0!important;align-content:start!important;background:#fbfdff!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-tools-row{
+  grid-column:2!important;grid-row:1!important;align-self:center!important;width:100%!important;max-width:none!important;height:44px!important;min-height:44px!important;
+  margin:0!important;padding:0 2px!important;gap:4px!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-modes{gap:2px!important;height:44px!important;min-height:44px!important;padding:0!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-modes>[data-mode]{height:44px!important;min-height:44px!important;font-size:11px!important;padding:0 6px!important;gap:5px!important;flex:1 1 auto!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-modes>.an-media-import-trigger{min-width:0!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-tools-row>.an-pages-toggle{width:66px!important;min-width:66px!important;flex:0 0 66px!important;height:44px!important;min-height:44px!important;padding:0 4px!important;gap:4px!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-object-actions{gap:2px!important;padding-left:4px!important;min-width:0!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-object-actions .an-button{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;margin:0!important;padding:0!important}
+ #atelierNoteEditor.an-editor .an-toolbar .an-context{
+  grid-column:1/-1!important;grid-row:2!important;min-height:54px!important;height:54px!important;max-height:54px!important;
+  width:min(100%,1000px)!important;margin:0 auto!important;padding:4px 8px!important;border-radius:12px!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-context[data-mode=text]{
+  grid-template-columns:112px 80px 72px 132px 44px 44px max-content max-content!important;
+  grid-template-areas:"preset font size style alignment list palette history"!important;gap:5px!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-context:is([data-mode=pencil],[data-mode=shape]):not(:has(.an-object-adjustments)){
+  grid-template-columns:max-content max-content 44px max-content!important;grid-template-areas:"tools palette clear history"!important
+ }
+ #atelierNoteEditor.an-editor .an-toolbar .an-context>.an-color-field{border-left:1px solid #e0e7ef!important;padding-left:6px!important;justify-self:center!important}
+ #atelierNoteEditor.an-editor .an-context:has(.an-object-adjustments){flex-wrap:nowrap!important}
+ #atelierNoteEditor.an-editor>.an-editor-body{grid-column:1/-1!important;grid-row:3!important}
+ #atelierNoteEditor.an-editor>.an-editor-footer{grid-column:1/-1!important;grid-row:4!important;min-height:40px!important}
+}

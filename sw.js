@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fisa-atelier-v360';
+const CACHE_NAME = 'fisa-atelier-v361';
 const AUTH_SCRIPTS=['firebase-app-compat.js','firebase-auth-compat.js','firebase-firestore-compat.js'].map(name=>'https://www.gstatic.com/firebasejs/10.14.1/'+name);
 const APP_FILES = [
   './',
@@ -11,8 +11,9 @@ const APP_FILES = [
   './handles/handles.js?v=1.29.0',
   './handles/catalog.json?v=1.28.0',
   './handles/legs.json?v=1.29.0',
-  './sw.js?v=1.29.0',
+  './sw.js?v=1.29.1',
   './notes/notes-editor.css?v=1.26.13',
+  './notes/toolbar-layout.css?v=1.29.1',
   './notes/notes-editor.js?v=1.27.0',
   './inventory/inventory.css?v=1.24.10',
   './inventory/inventory.js?v=1.26.14',
