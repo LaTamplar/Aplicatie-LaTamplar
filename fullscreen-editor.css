@@ -1,0 +1,250 @@
+/* Project drawing: one restrained floating palette, without changing canvas geometry. */
+body.fullscreen-mode #fullscreenDrawingToolbar {
+  width: min(584px, calc(var(--app-safe-width) - 24px));
+  max-width: calc(var(--app-safe-width) - 24px);
+  transform: none;
+  transition: opacity .12s ease;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .fullscreen-drawing-toolbar-shell {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  max-width: none;
+  padding: 10px;
+  overflow: visible;
+  border: 1px solid #536477;
+  border-radius: 20px;
+  background: #233243;
+  color: #edf4fb;
+  box-shadow: 0 14px 36px #09142045, inset 0 1px 0 #ffffff12;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-toolbar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 154px;
+  grid-template-areas: "edit size" "color actions";
+  width: 100%;
+  gap: 8px 12px;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-group {
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-group::before { display: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .edit-group { grid-area: edit; }
+body.fullscreen-mode #fullscreenDrawingToolbar .size-group { grid-area: size; position: static; }
+body.fullscreen-mode #fullscreenDrawingToolbar .color-group { grid-area: color; border-top: 1px solid #ffffff16; padding-top: 8px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .actions-group { grid-area: actions; border-top: 1px solid #ffffff16; padding-top: 8px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-group-row { gap: 4px; min-height: 44px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .edit-group > .tool-label { display: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .tool-label {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: #adc0d1;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  box-sizing: border-box;
+  width: 48px;
+  min-width: 48px;
+  height: 52px;
+  min-height: 52px;
+  margin: 0;
+  padding: 7px 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: #dce8f3;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button::before { display: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button::after {
+  content: attr(data-tool-label);
+  position: static;
+  display: block;
+  visibility: visible;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+  transform: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button svg { position: static; inset: auto; width: 19px; height: 19px; flex: 0 0 19px; margin: 0; transform: none; filter: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button.active {
+  color: #fff;
+  background: #426d95;
+  border-color: #7ba4ca;
+  box-shadow: inset 0 1px 0 #ffffff1c;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar button:hover:not(:disabled) { background-color: #ffffff13; transform: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button.active:hover { background-color: #4a789f; }
+body.fullscreen-mode #fullscreenDrawingToolbar button:focus-visible,
+body.fullscreen-mode #fullscreenDrawingToolbar input:focus-visible { outline: 2px solid #a8d3f8; outline-offset: 2px; }
+body.fullscreen-mode #fullscreenDrawingToolbar button:disabled { opacity: .35; box-shadow: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .color-group > .tool-label { display: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .quick-colors { gap: 2px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .quick-color-button {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border: 8px solid #233243;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px #ffffff40;
+  outline: none;
+  transform: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .quick-color-button.is-selected {
+  border-color: #233243;
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 1px #9fbad04d;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .quick-color-button:hover:not(:disabled) { background: var(--swatch); }
+body.fullscreen-mode #fullscreenDrawingToolbar .quick-color-button.is-selected::after { font-size: 14px; font-weight: 700; text-shadow: 0 1px 2px #0008; }
+body.fullscreen-mode #fullscreenDrawingToolbar .color-picker-control {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: 1px solid #63778a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar #fullscreenColorPicker {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -1px;
+  padding: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .size-group { flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; padding-left: 10px; border-left: 1px solid #ffffff16; }
+body.fullscreen-mode #fullscreenDrawingToolbar .size-group > .tool-label { font-size: 8px; }
+body.fullscreen-mode #fullscreenDrawingToolbar #fullscreenBrushSizeTrigger {
+  width: 142px;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 9px;
+  gap: 8px;
+  border: 1px solid #63778a;
+  border-radius: 11px;
+  color: #edf4fb;
+  background: #2d4053;
+  box-shadow: none;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar #fullscreenBrushSizeValue { padding: 0; min-width: 28px; color: inherit; background: none; font-size: 11px; border: 0; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-size-trigger-line { width: 36px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .actions-group { justify-content: flex-end; gap: 8px; }
+body.fullscreen-mode #fullscreenDrawingToolbar .actions-group > .tool-label { font-size: 9px; letter-spacing: 0; text-transform: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .actions-group .drawing-tool-group-row { margin: 0; }
+body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button.danger {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #bb8085;
+  border-radius: 11px;
+  color: #ffced0;
+  background: #683f4938;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar .actions-group .drawing-tool-button::after { display: none; }
+body.fullscreen-mode #fullscreenDrawingToolbar .fullscreen-toolbar-close-fallback { display: none; }
+body.fullscreen-mode #fullscreenToolbarToggle {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border: 1px solid #728da5;
+  border-radius: 15px;
+  color: #f4f8fb;
+  background: #2c4358;
+  box-shadow: 0 6px 18px #09142040;
+  backdrop-filter: none;
+}
+body.fullscreen-mode #fullscreenToolbarToggle.is-active { border-color: #a1c8eb; background: #3d6487; }
+body.fullscreen-mode #fullscreenToolbarToggle .toolbar-toggle-preview path { stroke: currentColor; }
+/* The inherited title used left:14px together with translateX(-50%). */
+body.fullscreen-mode .image-panel.fullscreen-panel #fullscreenImageTitle {
+  top: calc(var(--app-safe-top) + 14px);
+  left: calc(var(--app-safe-left) + 16px);
+  right: auto;
+  transform: none;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(var(--app-safe-width) - 92px);
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid #728da540;
+  border-radius: 11px;
+  background: #233243ed;
+  color: #dfeaf4;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: left;
+  text-shadow: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+body.fullscreen-mode #fullscreenCloseButton { width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 13px; box-shadow: none; background: #233243ed; }
+body.fullscreen-mode #fullscreenDrawingToolbar #fullscreenBrushSizePanel {
+  position: fixed;
+  left: calc(var(--app-safe-left) + var(--app-safe-width) / 2);
+  top: calc(var(--app-safe-top) + var(--app-safe-height) / 2);
+  translate: -50% -50%;
+  width: min(286px, calc(var(--app-safe-width) - 32px));
+  max-height: calc(var(--app-safe-height) - 24px);
+  overflow: auto;
+}
+body.fullscreen-mode #fullscreenDrawingToolbar #fullscreenBrushSizePanel::before { display: none; }
+@media (max-width: 620px) {
+  body.fullscreen-mode #fullscreenDrawingToolbar { width: min(368px, calc(var(--app-safe-width) - 24px)); }
+  body.fullscreen-mode #fullscreenDrawingToolbar .drawing-toolbar-row {
+    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-areas: "edit edit" "color color" "size actions";
+    gap: 8px;
+  }
+  body.fullscreen-mode #fullscreenDrawingToolbar .edit-group { justify-content: center; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .edit-group .drawing-tool-group-row { gap: 0; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .drawing-tool-button { width: 44px; min-width: 44px; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .color-group { justify-content: center; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .size-group { flex-direction: row; align-items: center; justify-content: flex-start; padding: 0; border: 0; gap: 10px; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .actions-group { padding: 0; border: 0; }
+  body.fullscreen-mode #fullscreenDrawingToolbar .actions-group > .tool-label { display: none; }
+}

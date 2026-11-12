@@ -4783,6 +4783,8 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       let imageActivationToken = 0;
       let projectDirty = false;
       let autosaveInProgress = false;
+      let autosaveTask = null;
+      let projectCloseTask = null;
       let autosaveMutationCounter = 0;
       let projectRestoreInProgress = false;
       let pendingAutosaveAfterRestore = false;
@@ -4809,7 +4811,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       const firebasePendingDeletesMetaKey = 'firebase-pending-deletes-v1';
       const firebasePendingRecordsMetaKey = 'firebase-pending-records-v1';
       const projectVersion = 2;
-      const APP_VERSION = '1.29.1';
+      const APP_VERSION = '1.29.2';
       const projectMigrationMetaKey = 'project-migration-v1';
       const floatingToolbarStorageKey = 'fisa-atelier-toolbar-position';
       const manualProjectExportedAtStorageKey = 'fisa-atelier-last-manual-export-at';
@@ -7602,20 +7604,23 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
 
       async function closeActiveProjectSafely() {
-        if (projectDirty) {
-          await flushAutosave({ force: true });
-        }
-        await setActiveProjectId(null);
-        resetCurrentProject({ persist: false });
-        showProjectManager();
+        if (projectCloseTask) return projectCloseTask;
+        projectCloseTask = (async () => {
+          commitActiveDrawing();
+          if (projectDirty || autosaveInProgress) {
+            if (await flushAutosave({ force: true }) === false) return false;
+          }
+          await setActiveProjectId(null);
+          resetCurrentProject({ persist: false });
+          showProjectManager();
+          return true;
+        })();
+        try { return await projectCloseTask; }
+        finally { projectCloseTask = null; }
       }
 
       async function navigateToProjectManagerFromEditor() {
-        if (projectDirty) {
-          await flushAutosave({ force: true });
-        }
-        await closeActiveProjectSafely();
-        await refreshProjectManagerIfNeeded();
+        if (await closeActiveProjectSafely() !== false) await refreshProjectManagerIfNeeded();
       }
 
       function openDeleteProjectDialog(projectId) {
@@ -7914,43 +7919,52 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
 
       async function flushAutosave({ force = false } = {}) {
+        if (force) commitActiveDrawing();
         if (projectRestoreInProgress) {
           pendingAutosaveAfterRestore = true;
-          return;
+          return false;
         }
-        if (!force && !projectDirty) return;
+        if (!force && !projectDirty) return true;
         if (!force && isContinuousInteractionActive()) {
           window.clearTimeout(saveTimer);
           saveTimer = window.setTimeout(() => flushAutosave(), AUTOSAVE_DEBOUNCE_MS);
-          return;
+          return false;
         }
         if (autosaveInProgress) {
-          window.clearTimeout(saveTimer);
-          saveTimer = window.setTimeout(() => flushAutosave({ force }), 260);
-          return;
+          // Navigation must await the actual write, including edits made after its snapshot.
+          const saved = await autosaveTask;
+          if (!force) return saved;
+          if (!saved) return false;
+          return projectDirty ? flushAutosave({ force: true }) : true;
         }
 
+        window.clearTimeout(saveTimer);
         autosaveInProgress = true;
         const saveSnapshotCounter = autosaveMutationCounter;
-        try {
-          await saveLastWork();
-          if (autosaveMutationCounter === saveSnapshotCounter) {
-            markProjectClean();
-          } else {
+        const task = autosaveTask = (async () => {
+          try {
+            await saveLastWork();
+            if (autosaveMutationCounter === saveSnapshotCounter) {
+              markProjectClean();
+            } else {
+              projectDirty = true;
+              saveTimer = window.setTimeout(() => flushAutosave(), AUTOSAVE_DEBOUNCE_MS);
+            }
+            return true;
+          } catch (error) {
             projectDirty = true;
-            saveTimer = window.setTimeout(() => {
-              flushAutosave();
-            }, AUTOSAVE_DEBOUNCE_MS);
+            console.warn('Proiectul rămâne nesalvat local; autosave-ul va reîncerca.', error);
+            showSaveToast('Salvarea locală nu a reușit. Desenul rămâne deschis; încearcă din nou sau exportă proiectul.');
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(() => flushAutosave(), 12000);
+            return false;
+          } finally {
+            autosaveInProgress = false;
           }
-        } catch (error) {
-          projectDirty = true;
-          console.warn('Proiectul rămâne nesalvat local; autosave-ul va reîncerca.', error);
-          showSaveToast('Spațiul local este plin. Proiectul nu a fost șters; salvează un export de rezervă.');
-          window.clearTimeout(saveTimer);
-          saveTimer = window.setTimeout(() => flushAutosave(), 12000);
-        } finally {
-          autosaveInProgress = false;
-        }
+        })();
+        const saved = await task;
+        if (autosaveTask === task) autosaveTask = null;
+        return force && saved && projectDirty ? flushAutosave({ force: true }) : saved;
       }
 
       function scheduleSave() {
@@ -9476,35 +9490,40 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         }
         if (event.pointerId !== undefined && event.pointerId !== activeDrawingPointerId) return;
         event.preventDefault();
-        if (activeDrawMode === 'line') {
-          if (activeStroke && activeStroke.type === 'line' && activeStroke.points.length >= 2) {
-            finalizeLineDraft();
-          } else {
-            lineDraftStartPoint = null;
-            lineDraftCurrentPoint = null;
-            activeStroke = null;
-            redraw();
+        // pointerup can contain the final Pencil sample without a preceding pointermove.
+        if (event.type === 'pointerup' && Number.isFinite(event.clientX) && Number.isFinite(event.clientY) && activeStroke) {
+          const point = pointFromEvent(event);
+          if (point) {
+            if (activeStroke.type === 'line') activeStroke.points[1] = point;
+            else pendingStrokePoints.push(point);
           }
-          releasePointerCapture(canvas, event.pointerId ?? activeDrawingPointerId);
-          activeDrawingPointerId = null;
-          isDrawing = false;
-          return;
         }
-        if (!activeStroke) return;
+        commitActiveDrawing();
+      }
+
+      function commitActiveDrawing() {
+        if (!activeStroke) return false;
         flushPendingStrokePoints({ cancelAnimation: true });
-        releasePointerCapture(canvas, event.pointerId ?? activeDrawingPointerId);
+        const pointerId = activeDrawingPointerId;
         activeDrawingPointerId = null;
         isDrawing = false;
-        strokes.push(activeStroke);
-        redoStack = [];
-        activeStroke = null;
-        pendingStrokePoints = [];
-        redraw();
-        renderDimensions();
-        updateActiveThumbnailDrawing();
-        setControls();
-        syncBrushControls();
-        scheduleSave();
+        if (activeStroke.type === 'line') {
+          finalizeLineDraft();
+        } else {
+          strokes.push(activeStroke);
+          redoStack = [];
+          activeStroke = null;
+          pendingStrokePoints = [];
+          redraw();
+          renderDimensions();
+          updateActiveThumbnailDrawing();
+          setControls();
+          syncBrushControls();
+          scheduleSave();
+        }
+        // Release after committing, so lostpointercapture cannot commit the same stroke twice.
+        releasePointerCapture(canvas, pointerId);
+        return true;
       }
 
       function createNoteId() {
@@ -9520,7 +9539,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const toggleHeight = fullscreenToolbarToggle?.offsetHeight || 44;
         const safe = overlay.getBoundingClientRect();
         const minX = safe.left + 10;
-        const minY = safe.top + 10;
+        const minY = safe.top + 64;
         const maxX = Math.max(minX, safe.right - toggleWidth - 10);
         const maxY = Math.max(minY, safe.bottom - toggleHeight - 10);
         return { minX, minY, maxX, maxY };
@@ -9552,6 +9571,17 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
         const { minX, minY, maxX, maxY } = getFloatingToolbarBounds();
         floatingToolbarPosition.x = clamp(floatingToolbarPosition.x, minX, maxX);
         floatingToolbarPosition.y = clamp(floatingToolbarPosition.y, minY, maxY);
+        // Keep the movable handle clear of the fixed image-navigation buttons.
+        for (const control of [fullscreenPrevImageBtn, fullscreenNextImageBtn]) {
+          if (!control || control.hidden) continue;
+          const rect = control.getBoundingClientRect();
+          if (floatingToolbarPosition.x < rect.right + 8
+            && floatingToolbarPosition.x + fullscreenToolbarToggle.offsetWidth > rect.left - 8
+            && floatingToolbarPosition.y < rect.bottom + 8
+            && floatingToolbarPosition.y + fullscreenToolbarToggle.offsetHeight > rect.top - 8) {
+            floatingToolbarPosition.y = clamp(rect.bottom + 10, minY, maxY);
+          }
+        }
         fullscreenToolbarToggle.style.left = `${floatingToolbarPosition.x}px`;
         fullscreenToolbarToggle.style.top = `${floatingToolbarPosition.y}px`;
         fullscreenToolbarToggle.style.right = 'auto';
@@ -9594,7 +9624,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           top = buttonRect.bottom - toolbarRect.height;
         }
         left = clamp(left, safe.left + 10, Math.max(safe.left + 10, safe.right - toolbarRect.width - 10));
-        top = clamp(top, safe.top + 10, Math.max(safe.top + 10, safe.bottom - toolbarRect.height - 10));
+        top = clamp(top, safe.top + 64, Math.max(safe.top + 64, safe.bottom - toolbarRect.height - 10));
 
         fullscreenDrawingToolbar.style.left = `${left}px`;
         fullscreenDrawingToolbar.style.top = `${top}px`;
@@ -10748,6 +10778,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       }
 
       function resetInteractionState() {
+        commitActiveDrawing();
         activeStroke = null;
         pendingStrokePoints = [];
         if (drawingFrameRequest !== null) {
@@ -11956,10 +11987,12 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
           resumePendingFirebaseSync({ reloadQueue: true }).catch((error) => console.warn('Coada offline Firebase va reîncerca.', error)).finally(() => firebaseRefreshFromCloud());
           return;
         }
+        commitActiveDrawing();
         if (!projectDirty) return;
         flushAutosave({ force: true });
       });
       window.addEventListener('pagehide', () => {
+        commitActiveDrawing();
         if (!projectDirty) return;
         flushAutosave({ force: true });
       });
@@ -12343,6 +12376,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
       canvas.addEventListener('pointermove', continueDrawing, { passive: false });
       canvas.addEventListener('pointerup', finishDrawing, { passive: false });
       canvas.addEventListener('pointercancel', finishDrawing, { passive: false });
+      canvas.addEventListener('lostpointercapture', finishDrawing, { passive: false });
       canvas.addEventListener('pointerdown', beginEditorImageSwipe, { capture: true, passive: false });
       window.addEventListener('pointermove', updateEditorImageSwipe, { passive: false });
       window.addEventListener('pointerup', finishEditorImageSwipe, { passive: false });
@@ -13561,6 +13595,7 @@ body:not(.fullscreen-mode) #editorView #notesModeBtn.active:hover{background:var
 <script src="./handles/handles.js?v=1.29.0" defer></script>
 <link rel="stylesheet" href="./app-safe-area.css?v=1.26.7">
 <link rel="stylesheet" href="./notes/toolbar-layout.css?v=1.29.1">
+  <link rel="stylesheet" href="./fullscreen-editor.css?v=1.29.2">
 </body>
 </html>
 
